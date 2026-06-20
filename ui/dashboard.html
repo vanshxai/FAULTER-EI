@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nassenger 8 — Digital Twin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --nb:#131928;--nd:#0a0f1a;--nl:#1c2538;
+  --nr:5px 5px 10px var(--nd),-5px -5px 10px var(--nl);
+  --ni:inset 4px 4px 8px var(--nd),inset -4px -4px 8px var(--nl);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#050810;font-family:'Courier New',monospace;color:#c0e8f0}
+#root{display:flex;width:100vw;height:100vh}
+#canvas-wrap{flex:0 0 70%;position:relative;overflow:hidden}
+#nn-canvas{display:block;width:100%;height:100%}
+#panel{flex:0 0 30%;display:flex;flex-direction:column;overflow:hidden;background:var(--nb);box-shadow:-8px 0 24px var(--nd)}
+/* panel sections */
+.psec{border-bottom:1px solid rgba(28,37,56,0.65);padding:10px 12px;flex-shrink:0}
+.psec-title{font-size:9px;letter-spacing:2px;color:#7ab8cc;text-transform:uppercase;margin-bottom:8px}
+#panel-scroll{flex:1;overflow-y:auto;min-height:0}
+#panel-scroll::-webkit-scrollbar{width:4px}
+#panel-scroll::-webkit-scrollbar-track{background:var(--nb)}
+#panel-scroll::-webkit-scrollbar-thumb{background:var(--nl);border-radius:2px}
+/* status */
+#status-name{font-size:11px;color:#00ffcc;letter-spacing:1px;margin-bottom:2px;text-shadow:0 0 10px rgba(0,255,204,0.3)}
+#status-sub{font-size:9px;color:#7ab8cc;margin-bottom:8px}
+#conn-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+#conn-dot{width:8px;height:8px;border-radius:50%;background:#ff3300;flex-shrink:0;transition:background .3s}
+#conn-dot.ok{background:#00ffcc;box-shadow:0 0 6px rgba(0,255,204,0.5)}
+#conn-label{font-size:10px;color:#7ab8cc}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.stat-cell{font-size:10px;color:#7ab8cc}.stat-cell span{color:#e0f4ff}
+/* controls */
+.btn-row{display:flex;gap:6px;margin-bottom:8px}
+.btn{background:var(--nb);border:none;color:#7ab8cc;font-family:'Courier New',monospace;font-size:10px;padding:6px 11px;cursor:pointer;border-radius:6px;box-shadow:var(--nr);transition:box-shadow .15s,color .15s}
+.btn:hover:not(:disabled){color:#00ffcc;box-shadow:6px 6px 12px var(--nd),-6px -6px 12px var(--nl)}
+.btn.active{box-shadow:var(--ni);color:#00ffcc;font-weight:bold}
+.btn:disabled{opacity:0.3;cursor:not-allowed;box-shadow:none;color:#3a6a7a}
+.btn.fault-btn{color:#cc7a6a}
+.btn.fault-btn:hover:not(:disabled){color:#ff3300;box-shadow:6px 6px 12px var(--nd),-6px -6px 12px var(--nl)}
+.btn.fault-btn.active{box-shadow:var(--ni);color:#ff3300;font-weight:bold}
+#omega-display{font-size:20px;color:#00ffcc;letter-spacing:2px;margin-bottom:2px;text-shadow:0 0 12px rgba(0,255,204,0.3)}
+#omega-label{font-size:9px;color:#7ab8cc}
+/* blackboard table */
+#bb-table{width:100%;border-collapse:collapse}
+#bb-table td{font-size:10px;padding:3px 0;border-bottom:1px solid rgba(28,37,56,0.6)}
+#bb-table td:first-child{color:#00ffcc;padding-right:8px;white-space:nowrap}
+#bb-table td:last-child{color:#e0f4ff;text-align:right}
+td.flash{color:#00ffcc!important;animation:flash-fade .5s ease-out}
+@keyframes flash-fade{0%{color:#00ffcc}100%{color:#e0f4ff}}
+/* anomaly rows */
+.anom-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.anom-name{font-size:9px;color:#7ab8cc;width:72px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.anom-bar-wrap{flex:1;height:6px;border-radius:3px;overflow:hidden;box-shadow:inset 2px 2px 4px var(--nd),inset -2px -2px 4px var(--nl)}
+.anom-bar{height:100%;border-radius:3px;transition:width .15s,background .15s}
+.anom-val{font-size:9px;color:#e0f4ff;width:40px;text-align:right;flex-shrink:0}
+#global-anom{font-size:24px;font-weight:bold;letter-spacing:2px;margin-bottom:4px}
+#fault-active-display{font-size:10px;color:#ff3300;min-height:14px;letter-spacing:1px}
+/* sparklines */
+.spark-row{margin-bottom:8px}
+.spark-label{font-size:9px;color:#7ab8cc;margin-bottom:3px}
+canvas.spark{display:block;width:100%;height:50px;background:#0a0f1a;border-radius:6px;box-shadow:inset 3px 3px 7px var(--nd),inset -3px -3px 7px var(--nl)}
+/* detail panel overlay */
+#detail{position:absolute;bottom:16px;right:16px;width:320px;max-height:320px;overflow-y:auto;background:var(--nb);border:none;box-shadow:8px 8px 20px var(--nd),-8px -8px 20px var(--nl);border-radius:12px;padding:14px;font-size:10px;display:none;z-index:10}
+#detail::-webkit-scrollbar{width:3px}
+#detail::-webkit-scrollbar-thumb{background:var(--nl)}
+#detail-title{font-size:11px;color:#00ffcc;letter-spacing:1px;margin-bottom:8px;border-bottom:1px solid rgba(28,37,56,0.7);padding-bottom:6px}
+.detail-sec{margin-bottom:8px}
+.detail-sec-title{font-size:9px;color:#7ab8cc;letter-spacing:1px;margin-bottom:4px;text-transform:uppercase}
+.detail-kv{display:flex;justify-content:space-between;margin-bottom:2px}
+.detail-k{color:#7ab8cc}.detail-v{color:#e0f4ff}
+.detail-status-ok{color:#00cc66}.detail-status-warn{color:#ffaa00}.detail-status-fault{color:#ff3300}
+#detail-close{position:absolute;top:10px;right:12px;cursor:pointer;color:#7ab8cc;font-size:14px}
+#detail-close:hover{color:#00ffcc}
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="canvas-wrap">
+    <canvas id="nn-canvas"></canvas>
+    <div id="detail">
+      <span id="detail-close" onclick="closeDetail()">✕</span>
+      <div id="detail-title">NODE DETAIL</div>
+      <div id="detail-body"></div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <!-- STATUS -->
+    <div class="psec">
+      <div id="status-name">NASSENGER 8 DIGITAL TWIN</div>
+      <div id="status-sub">P101 FABRIC ROLL — 9 AGENTS · 27 NODES</div>
+      <div id="conn-row">
+        <div id="conn-dot"></div>
+        <div id="conn-label">DISCONNECTED</div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-cell">TICK <span id="s-tick">0</span></div>
+        <div class="stat-cell">TIME <span id="s-time">0.000s</span></div>
+        <div class="stat-cell">RATE <span id="s-rate">50 Hz</span></div>
+        <div class="stat-cell">SPEED <span id="s-speed">1x</span></div>
+      </div>
+    </div>
+
+    <!-- SIMULATION CONTROLS -->
+    <div class="psec">
+      <div class="psec-title">Simulation</div>
+      <div class="btn-row">
+        <button class="btn" id="btn-run"   onclick="sendCmd('control',{command:'run'})">▶ RUN</button>
+        <button class="btn" id="btn-pause" onclick="sendCmd('control',{command:'pause'})">⏸ PAUSE</button>
+        <button class="btn" id="btn-reset" onclick="sendCmd('control',{command:'reset'})">⏹ RESET</button>
+      </div>
+      <div class="btn-row" id="speed-row">
+        <button class="btn active" onclick="setSpeed(1)" data-s="1">1x</button>
+        <button class="btn" onclick="setSpeed(2)" data-s="2">2x</button>
+        <button class="btn" onclick="setSpeed(5)" data-s="5">5x</button>
+        <button class="btn" onclick="setSpeed(10)" data-s="10">10x</button>
+      </div>
+      <div id="omega-display">0.00 rad/s</div>
+      <div id="omega-label">motor spinup</div>
+    </div>
+
+    <div id="panel-scroll">
+      <!-- BLACKBOARD -->
+      <div class="psec">
+        <div class="psec-title">Blackboard Live</div>
+        <table id="bb-table">
+          <tbody id="bb-body"></tbody>
+        </table>
+      </div>
+
+      <!-- ANOMALY MAP -->
+      <div class="psec">
+        <div class="psec-title">Anomaly Monitor</div>
+        <div id="anom-rows"></div>
+        <div style="margin-top:8px;margin-bottom:2px">
+          <div style="font-size:9px;color:#7ab8cc;margin-bottom:4px">GLOBAL ANOMALY SCORE</div>
+          <div id="global-anom">0.0000</div>
+        </div>
+        <div id="fault-active-display"></div>
+      </div>
+
+      <!-- FAULT INJECTION -->
+      <div class="psec">
+        <div class="psec-title">Fault Injection</div>
+        <div class="btn-row" style="flex-wrap:wrap">
+          <button class="btn fault-btn" id="fb-OVERSPEED" onclick="injectFault('OVERSPEED')">⚡ OVERSPEED</button>
+          <button class="btn fault-btn" id="fb-UNDERSPEED" onclick="injectFault('UNDERSPEED')">🔻 UNDERSPEED</button>
+        </div>
+        <div class="btn-row" style="flex-wrap:wrap">
+          <button class="btn fault-btn" id="fb-BELOW_CORE" onclick="injectFault('BELOW_CORE')">📉 BELOW CORE</button>
+          <button class="btn fault-btn" onclick="injectFault('CLEAR')">✓ CLEAR</button>
+        </div>
+      </div>
+
+      <!-- SPARKLINES -->
+      <div class="psec">
+        <div class="psec-title">Trends — last 100 ticks</div>
+        <div class="spark-row">
+          <div class="spark-label">v_fabric (m/s)</div>
+          <canvas class="spark" id="sp-v_fabric" width="300" height="50"></canvas>
+        </div>
+        <div class="spark-row">
+          <div class="spark-label">r_next (m)</div>
+          <canvas class="spark" id="sp-r_next" width="300" height="50"></canvas>
+        </div>
+        <div class="spark-row">
+          <div class="spark-label">global anomaly</div>
+          <canvas class="spark" id="sp-anomaly" width="300" height="50"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA MODEL
+// ═══════════════════════════════════════════
+const AGENT_IDS = [
+  'P101_rho_eff',
+  'P101_r_next',
+  'P101_m_roll','P101_sigma_res',
+  'P101_j_roll','P101_l_rem','P101_depletion','P101_n_layers','P101_v_fabric'
+];
+
+const AGENT_SHORT = {
+  P101_rho_eff:   'rho_eff',
+  P101_r_next:    'r_next',
+  P101_m_roll:    'm_roll',
+  P101_sigma_res: 'sigma',
+  P101_j_roll:    'J_roll',
+  P101_l_rem:     'L_rem',
+  P101_depletion: 'deplet',
+  P101_n_layers:  'N_lay',
+  P101_v_fabric:  'v_fab',
+};
+
+const AGENT_FORMULA_EQ = {
+  P101_rho_eff:   'ρ=ρf(1-φ)+ρa·φ',
+  P101_r_next:    'dr/dt=-v·t/(2π·r)',
+  P101_m_roll:    'm=ρ·π(r²-rc²)·w',
+  P101_sigma_res: 'σ=(T/wt)·ln(rm/r)',
+  P101_j_roll:    'J=½m(r²+rc²)',
+  P101_l_rem:     'L=π(r²-rc²)/t',
+  P101_depletion: 'd=(r-rc)/(rm-rc)·100',
+  P101_n_layers:  'N=(r-rc)/t',
+  P101_v_fabric:  'v=ω·r',
+};
+
+const AGENT_OUTPUT_LABEL = {
+  P101_rho_eff:   'rho_eff [kg/m³]',
+  P101_r_next:    'r_next [m]',
+  P101_m_roll:    'm_roll [kg]',
+  P101_sigma_res: 'sigma_res [Pa]',
+  P101_j_roll:    'J_roll [kg·m²]',
+  P101_l_rem:     'L_rem [m]',
+  P101_depletion: 'depletion_pct [%]',
+  P101_n_layers:  'N_layers [-]',
+  P101_v_fabric:  'v_fabric [m/s]',
+};
+
+// ═══════════════════════════════════════════
+// NODE LAYOUT  — Zone C: auto-stacking zones
+// ═══════════════════════════════════════════
+const NR = 28;      // node radius px
+const EX_X = 140;   // examiner column x  (world)
+const FM_X = 330;   // formula  column x  (world)
+const VL_X = 520;   // validator column x (world)
+
+// Layout constants
+const AGENT_SPACING   = 82;  // px between agent rows within a group
+const GROUP_HEADER_H  = 28;  // height reserved for group label text
+const GROUP_GAP       = 16;  // vertical gap between groups inside a zone
+const ZONE_HEADER_H   = 52;  // zone title area height
+const ZONE_GAP        = 80;  // vertical gap between zones
+const ZONE_PADDING_X  = 20;  // horizontal inset for zone border
+const ZONE_WIDTH      = VL_X + NR + ZONE_PADDING_X + 20; // zone box width
+
+// ── Zone definitions ───────────────────────
+// Add new zones here; positions compute automatically.
+const ZONES = [
+  {
+    id:    'P101',
+    label: 'P101 — FABRIC ROLL',
+    color: '#003322',
+    borderColor: '#005544',
+    groups: [
+      { label:'A — Layer 1', agents:['P101_rho_eff'] },
+      { label:'B — Layer 2', agents:['P101_r_next'] },
+      { label:'C — Layer 3', agents:['P101_m_roll','P101_sigma_res'] },
+      { label:'D — Layer 4', agents:['P101_j_roll','P101_l_rem','P101_depletion','P101_n_layers','P101_v_fabric'] },
+    ],
+  },
+  // Future zones (P102, P103 …) append here and positions update automatically.
+];
+
+// ── Compute NODE_POS from ZONES ────────────
+const NODE_POS = {};
+let _zoneY = 30;  // world-space start
+for (const zone of ZONES) {
+  zone.worldY = _zoneY;
+  let _groupY = _zoneY + ZONE_HEADER_H;
+
+  for (const grp of zone.groups) {
+    grp.worldY = _groupY;
+    for (let i = 0; i < grp.agents.length; i++) {
+      const aid = grp.agents[i];
+      const y   = _groupY + GROUP_HEADER_H + 10 + i * AGENT_SPACING;
+      NODE_POS[aid+':exam'] = {x: EX_X, y};
+      NODE_POS[aid+':form'] = {x: FM_X, y};
+      NODE_POS[aid+':val']  = {x: VL_X, y};
+    }
+    const gh = GROUP_HEADER_H + 10 + grp.agents.length * AGENT_SPACING;
+    grp.worldHeight = gh;
+    _groupY += gh + GROUP_GAP;
+  }
+  zone.worldHeight = _groupY - _zoneY;
+  _zoneY = _zoneY + zone.worldHeight + ZONE_GAP;
+}
+
+// Cross-agent data-flow connections
+const DATA_CONNS = [
+  ['P101_rho_eff:form',  'P101_m_roll:exam'],
+  ['P101_r_next:form',   'P101_m_roll:exam'],
+  ['P101_r_next:form',   'P101_sigma_res:exam'],
+  ['P101_r_next:form',   'P101_j_roll:exam'],
+  ['P101_r_next:form',   'P101_l_rem:exam'],
+  ['P101_r_next:form',   'P101_depletion:exam'],
+  ['P101_r_next:form',   'P101_n_layers:exam'],
+  ['P101_r_next:form',   'P101_v_fabric:exam'],
+  ['P101_m_roll:form',   'P101_j_roll:exam'],
+  ['P101_depletion:form','P101_l_rem:exam'],
+];
+
+// ═══════════════════════════════════════════
+// CANVAS SETUP
+// ═══════════════════════════════════════════
+const canvas = document.getElementById('nn-canvas');
+const ctx    = canvas.getContext('2d');
+let CW, CH;
+
+function resizeCanvas() {
+  const wrap = document.getElementById('canvas-wrap');
+  CW = canvas.width  = wrap.clientWidth;
+  CH = canvas.height = wrap.clientHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ═══════════════════════════════════════════
+// CAMERA — infinite pan + zoom
+// ═══════════════════════════════════════════
+const camera = { x: 60, y: 30, scale: 1.0 };
+const SCALE_MIN = 0.25, SCALE_MAX = 3.0;
+
+let _isPanning   = false;
+let _panStartMouse = {x:0, y:0};
+let _panStartCam   = {x:0, y:0};
+let _panMoved      = false;  // distinguish click from drag
+
+canvas.style.cursor = 'grab';
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  _isPanning     = true;
+  _panMoved      = false;
+  _panStartMouse = {x: e.clientX, y: e.clientY};
+  _panStartCam   = {x: camera.x,  y: camera.y};
+  canvas.style.cursor = 'grabbing';
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!_isPanning) return;
+  const dx = e.clientX - _panStartMouse.x;
+  const dy = e.clientY - _panStartMouse.y;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _panMoved = true;
+  camera.x = _panStartCam.x + dx;
+  camera.y = _panStartCam.y + dy;
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (!_isPanning) return;
+  _isPanning = false;
+  canvas.style.cursor = 'grab';
+  if (!_panMoved) _handleCanvasClick(e); // treat as click only if no drag
+});
+
+canvas.addEventListener('mouseleave', () => { _isPanning = false; canvas.style.cursor = 'grab'; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect   = canvas.getBoundingClientRect();
+  const sx     = (e.clientX - rect.left) * (CW / rect.width);   // screen px
+  const sy     = (e.clientY - rect.top)  * (CH / rect.height);
+  const factor = e.deltaY < 0 ? 1.1 : 0.909;
+  const newScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, camera.scale * factor));
+  // Zoom toward mouse: keep world point under cursor fixed
+  camera.x = sx - (sx - camera.x) * (newScale / camera.scale);
+  camera.y = sy - (sy - camera.y) * (newScale / camera.scale);
+  camera.scale = newScale;
+}, {passive: false});
+
+// Unproject screen → world coordinates
+function screenToWorld(sx, sy) {
+  return { x: (sx - camera.x) / camera.scale,
+           y: (sy - camera.y) / camera.scale };
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let latestMsg = null;
+let nodeGlow  = {};   // agentId+role → 0..1
+let pulses    = [];   // active animated pulses
+let selectedNode = null;
+
+// Sparkline history
+const SPARK_LEN = 100;
+const sparkData = { v_fabric: [], r_next: [], anomaly: [] };
+
+// Previous blackboard for flash detection
+let prevBB = {};
+
+// Init glow state
+for (const aid of AGENT_IDS) {
+  for (const role of ['exam','form','val']) {
+    nodeGlow[aid+':'+role] = 0;
+  }
+}
+
+// ═══════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════
+let ws = null;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => setConn(true);
+  ws.onclose = () => { setConn(false); setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'tick')  handleTick(msg);
+    if (msg.type === 'reset') handleReset();
+  };
+}
+connect();
+
+function setConn(ok) {
+  document.getElementById('conn-dot').className = ok ? 'ok' : '';
+  document.getElementById('conn-label').textContent = ok ? 'CONNECTED' : 'DISCONNECTED';
+}
+
+function sendCmd(type, data) {
+  if (ws && ws.readyState === 1)
+    ws.send(JSON.stringify({type, ...data}));
+}
+
+// Sync RUN/PAUSE button active+disabled states from server paused flag.
+// RUN  is active+disabled when running (paused=false).
+// PAUSE is active+disabled when paused (paused=true).
+function syncRunState(paused) {
+  const btnRun   = document.getElementById('btn-run');
+  const btnPause = document.getElementById('btn-pause');
+  if (paused) {
+    btnRun.classList.remove('active');   btnRun.disabled   = false;
+    btnPause.classList.add('active');    btnPause.disabled = true;
+  } else {
+    btnRun.classList.add('active');      btnRun.disabled   = true;
+    btnPause.classList.remove('active'); btnPause.disabled = false;
+  }
+}
+
+// Clear all client-side state when server confirms reset.
+function handleReset() {
+  latestMsg = null;
+  pulses    = [];
+  sparkData.v_fabric.length = 0;
+  sparkData.r_next.length   = 0;
+  sparkData.anomaly.length  = 0;
+  for (const key of Object.keys(nodeGlow)) nodeGlow[key] = 0;
+  selectedNode = null;
+  document.getElementById('detail').style.display = 'none';
+  document.getElementById('s-tick').textContent  = '0000000';
+  document.getElementById('s-time').textContent  = '0.000s';
+  document.getElementById('omega-display').textContent = '0.00 rad/s';
+  document.getElementById('global-anom').textContent   = '0.0000';
+  document.getElementById('fault-active-display').textContent = '';
+  // Clear bb table values
+  for (const cell of Object.values(bbCells)) cell.textContent = '—';
+  // Re-draw blank sparklines
+  ['sp-v_fabric','sp-r_next','sp-anomaly'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { const c = el.getContext('2d'); c.clearRect(0,0,el.width,el.height);
+              c.fillStyle='#0a1628'; c.fillRect(0,0,el.width,el.height); }
+  });
+  syncRunState(false); // server always starts unpaused after reset
+}
+
+// ═══════════════════════════════════════════
+// TICK HANDLER
+// ═══════════════════════════════════════════
+function handleTick(msg) {
+  latestMsg = msg;
+
+  // Sync button states from authoritative server paused flag
+  syncRunState(msg.paused);
+
+  // Status bar
+  document.getElementById('s-tick').textContent  = String(msg.tick).padStart(7,'0');
+  document.getElementById('s-time').textContent  = msg.t.toFixed(3)+'s';
+  document.getElementById('s-speed').textContent = msg.speed_multiplier+'x';
+
+  // Omega display
+  const omega = msg.blackboard.omega_roll ?? 0;
+  document.getElementById('omega-display').textContent = omega.toFixed(2)+' rad/s';
+
+  // Blackboard table
+  updateBlackboard(msg.blackboard);
+
+  // Anomaly map
+  updateAnomalyMap(msg.anomaly_map);
+
+  // Sparklines
+  const ga = globalAnomalyScore(msg.anomaly_map);
+  pushSpark(sparkData.v_fabric, msg.blackboard.v_fabric ?? 0);
+  pushSpark(sparkData.r_next,   msg.blackboard.r_next   ?? 0);
+  pushSpark(sparkData.anomaly,  ga);
+  drawSparkline('sp-v_fabric', sparkData.v_fabric, '#00ffcc');
+  drawSparkline('sp-r_next',   sparkData.r_next,   '#00ccff');
+  drawSparkline('sp-anomaly',  sparkData.anomaly,  '#ffaa00');
+
+  // Fault display
+  updateFaultDisplay(msg.fault_active);
+
+  // Glow + pulses for fired agents
+  if (msg.agents) {
+    for (const [aid, adata] of Object.entries(msg.agents)) {
+      if (adata.fired_this_tick) {
+        nodeGlow[aid+':exam'] = 1.0;
+        nodeGlow[aid+':form'] = 1.0;
+        nodeGlow[aid+':val']  = 1.0;
+      }
+    }
+  }
+
+  // Launch pulses on all connections
+  for (const [from, to] of DATA_CONNS) {
+    const a = NODE_POS[from], b = NODE_POS[to];
+    if (a && b) {
+      pulses.push({
+        fx: a.x, fy: a.y, tx: b.x, ty: b.y,
+        progress: 0,
+        color: '#00ffcc',
+      });
+    }
+  }
+  // Intra-agent pulses
+  for (const aid of AGENT_IDS) {
+    const e = NODE_POS[aid+':exam'], f = NODE_POS[aid+':form'], v = NODE_POS[aid+':val'];
+    pulses.push({fx:e.x,fy:e.y,tx:f.x,ty:f.y,progress:0,color:'#00ffcc'});
+    pulses.push({fx:f.x,fy:f.y,tx:v.x,ty:v.y,progress:0,color:'#00ffcc'});
+  }
+
+  // Detail panel refresh if open
+  if (selectedNode) refreshDetail();
+}
+
+// ═══════════════════════════════════════════
+// BLACKBOARD TABLE
+// ═══════════════════════════════════════════
+const BB_UNITS = {
+  r_next:'m', m_roll:'kg', J_roll:'kg·m²', L_rem:'m',
+  depletion_pct:'%', N_layers:'', rho_eff:'kg/m³',
+  sigma_res:'Pa', v_fabric:'m/s', dr_dt:'m/s',
+  depletion_warning:'', omega_roll:'rad/s', r_current:'m',
+};
+const BB_ORDER = ['r_next','m_roll','J_roll','L_rem','depletion_pct',
+  'N_layers','rho_eff','sigma_res','v_fabric','dr_dt',
+  'depletion_warning','omega_roll','r_current'];
+
+let bbCells = {};
+
+function updateBlackboard(bb) {
+  const body = document.getElementById('bb-body');
+  if (!body.firstChild) {
+    // Build table rows once
+    for (const k of BB_ORDER) {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td');
+      td1.textContent = k;
+      const td2 = document.createElement('td');
+      td2.id = 'bb-'+k;
+      tr.appendChild(td1); tr.appendChild(td2);
+      body.appendChild(tr);
+      bbCells[k] = td2;
+    }
+  }
+  for (const k of BB_ORDER) {
+    const v = bb[k];
+    if (v === undefined) continue;
+    const cell = bbCells[k];
+    const txt  = (typeof v === 'number' ? v.toFixed(6) : v) + (BB_UNITS[k] ? ' '+BB_UNITS[k] : '');
+    if (cell.textContent !== txt) {
+      cell.textContent = txt;
+      cell.classList.remove('flash');
+      void cell.offsetWidth;
+      cell.classList.add('flash');
+    }
+  }
+  prevBB = {...bb};
+}
+
+// ═══════════════════════════════════════════
+// ANOMALY MAP
+// ═══════════════════════════════════════════
+let anomRows = {};
+
+function anomColor(v) {
+  if (v < 0.3) return '#00cc66';
+  if (v < 0.7) return '#ffaa00';
+  return '#ff3300';
+}
+
+function globalAnomalyScore(map) {
+  const vals = Object.values(map);
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+}
+
+function updateAnomalyMap(map) {
+  const container = document.getElementById('anom-rows');
+  for (const aid of AGENT_IDS) {
+    const v = map[aid] ?? 0;
+    if (!anomRows[aid]) {
+      const row = document.createElement('div');
+      row.className = 'anom-row';
+      row.innerHTML = `<div class="anom-name">${AGENT_SHORT[aid]}</div>
+        <div class="anom-bar-wrap"><div class="anom-bar" id="ab-${aid}"></div></div>
+        <div class="anom-val" id="av-${aid}">0.0000</div>`;
+      container.appendChild(row);
+      anomRows[aid] = true;
+    }
+    const bar = document.getElementById('ab-'+aid);
+    const val = document.getElementById('av-'+aid);
+    if (bar) { bar.style.width = (v*100).toFixed(1)+'%'; bar.style.background = anomColor(v); }
+    if (val) val.textContent = v.toFixed(4);
+  }
+  const ga = globalAnomalyScore(map);
+  const el = document.getElementById('global-anom');
+  el.textContent = ga.toFixed(4);
+  el.style.color = anomColor(ga);
+
+  // Active faults list
+  const faults = AGENT_IDS.filter(a=>(map[a]??0)>0.5).map(a=>AGENT_SHORT[a]);
+  document.getElementById('fault-active-display').textContent =
+    faults.length ? 'ACTIVE: '+faults.join(', ') : '';
+}
+
+// ═══════════════════════════════════════════
+// FAULT / CONTROL HELPERS
+// ═══════════════════════════════════════════
+function updateFaultDisplay(fault) {
+  ['OVERSPEED','UNDERSPEED','BELOW_CORE'].forEach(f=>{
+    const b = document.getElementById('fb-'+f);
+    if (b) b.classList.toggle('active', fault===f);
+  });
+}
+
+function injectFault(f) { sendCmd('fault',{fault:f}); }
+function setSpeed(n) {
+  sendCmd('speed',{multiplier:n});
+  document.querySelectorAll('#speed-row .btn').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.s)===n);
+  });
+}
+
+// ═══════════════════════════════════════════
+// SPARKLINES
+// ═══════════════════════════════════════════
+function pushSpark(arr, v) {
+  arr.push(v);
+  if (arr.length > SPARK_LEN) arr.shift();
+}
+
+function drawSparkline(id, data, color) {
+  const el = document.getElementById(id);
+  if (!el || data.length < 2) return;
+  const W = el.width, H = el.height;
+  const c = el.getContext('2d');
+  c.clearRect(0,0,W,H);
+  c.fillStyle = '#0a1628';
+  c.fillRect(0,0,W,H);
+
+  const mn = Math.min(...data), mx = Math.max(...data);
+  const rng = mx - mn || 1;
+  const xs = W / (SPARK_LEN - 1);
+
+  c.beginPath();
+  c.strokeStyle = color;
+  c.lineWidth = 1.5;
+  for (let i = 0; i < data.length; i++) {
+    const x = i * xs;
+    const y = H - ((data[i] - mn) / rng) * (H - 6) - 3;
+    i === 0 ? c.moveTo(x,y) : c.lineTo(x,y);
+  }
+  c.stroke();
+
+  // Current value at right edge
+  const last = data[data.length-1];
+  c.fillStyle = color;
+  c.font = '9px Courier New';
+  c.textAlign = 'right';
+  c.fillText(last.toFixed(2), W-3, 10);
+}
+
+// ═══════════════════════════════════════════
+// DETAIL PANEL
+// ═══════════════════════════════════════════
+function closeDetail() {
+  selectedNode = null;
+  document.getElementById('detail').style.display = 'none';
+}
+
+function openDetail(aid, role) {
+  if (selectedNode && selectedNode.aid === aid && selectedNode.role === role) {
+    closeDetail(); return;
+  }
+  selectedNode = {aid, role};
+  refreshDetail();
+  document.getElementById('detail').style.display = 'block';
+}
+
+function refreshDetail() {
+  if (!selectedNode || !latestMsg) return;
+  const {aid, role} = selectedNode;
+  const adata = latestMsg.agents?.[aid];
+  const body  = document.getElementById('detail-body');
+  const title = document.getElementById('detail-title');
+
+  if (!adata) { body.innerHTML='<div style="color:#7ab8cc">No data yet.</div>'; return; }
+
+  if (role === 'exam') {
+    title.textContent = `EXAMINER — ${aid}`;
+    const inp = (adata.examiner?.input ?? []).map(v=>v.toFixed(6)).join(', ');
+    const out = (adata.examiner?.output ?? []).map(v=>v.toFixed(6)).join(', ');
+    const pct = ((adata.examiner?.output?.[0] ?? 1) - 1)*100;
+    body.innerHTML = `
+      <div class="detail-sec">
+        <div class="detail-sec-title">Input Vector</div>
+        <div style="color:#c0e8f0;word-break:break-all;font-size:9px">[${inp}]</div>
+      </div>
+      <div class="detail-sec">
+        <div class="detail-sec-title">Output Adjustments</div>
+        <div style="color:#00ffcc;font-size:11px">[${out}]</div>
+        <div style="color:#7ab8cc;font-size:9px;margin-top:4px">adjusting constant by ${pct>=0?'+':''}${pct.toFixed(1)}%</div>
+      </div>
+      <div class="detail-sec">
+        <div class="detail-kv"><span class="detail-k">architecture</span><span class="detail-v">8→32→32→1</span></div>
+        <div class="detail-kv"><span class="detail-k">activation</span><span class="detail-v">GELU + LayerNorm</span></div>
+        <div class="detail-kv"><span class="detail-k">output range</span><span class="detail-v">[0.85, 1.15]</span></div>
+      </div>`;
+
+  } else if (role === 'form') {
+    title.textContent = `FORMULA — ${AGENT_SHORT[aid]}`;
+    const out = (adata.formula?.output ?? 0).toFixed(6);
+    const adj = (adata.examiner?.output ?? []).map(v=>v.toFixed(4)).join(', ');
+    body.innerHTML = `
+      <div class="detail-sec">
+        <div class="detail-sec-title">Equation</div>
+        <div style="color:#00ffcc;font-size:10px">${AGENT_FORMULA_EQ[aid]??'—'}</div>
+      </div>
+      <div class="detail-sec">
+        <div class="detail-sec-title">Output</div>
+        <div class="detail-kv"><span class="detail-k">${AGENT_OUTPUT_LABEL[aid]??'output'}</span><span class="detail-v">${out}</span></div>
+      </div>
+      <div class="detail-sec">
+        <div class="detail-sec-title">Examiner Adjustment</div>
+        <div class="detail-kv"><span class="detail-k">scale factor(s)</span><span class="detail-v">[${adj}]</span></div>
+      </div>`;
+
+  } else {
+    title.textContent = `VALIDATOR — ${aid}`;
+    const p = (adata.validator?.plausibility ?? 0).toFixed(6);
+    const a = (adata.validator?.anomaly_flag ?? 0).toFixed(6);
+    const av = parseFloat(a);
+    const statusClass = av < 0.3 ? 'detail-status-ok' : av < 0.7 ? 'detail-status-warn' : 'detail-status-fault';
+    const statusText  = av < 0.3 ? 'NOMINAL' : av < 0.7 ? 'WARNING' : 'FAULT';
+    body.innerHTML = `
+      <div class="detail-sec">
+        <div class="detail-kv"><span class="detail-k">plausibility</span><span class="detail-v">${p}</span></div>
+        <div class="detail-kv"><span class="detail-k">anomaly flag</span><span class="detail-v">${a}</span></div>
+        <div class="detail-kv"><span class="detail-k">status</span><span class="${statusClass}">${statusText}</span></div>
+      </div>
+      <div class="detail-sec">
+        <div class="detail-sec-title">Architecture</div>
+        <div class="detail-kv"><span class="detail-k">layers</span><span class="detail-v">5→16→2</span></div>
+        <div class="detail-kv"><span class="detail-k">activation</span><span class="detail-v">GELU + sigmoid</span></div>
+        <div class="detail-kv"><span class="detail-k">outputs</span><span class="detail-v">plausibility, anomaly</span></div>
+      </div>`;
+  }
+}
+
+function _handleCanvasClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) * (CW / rect.width);
+  const sy = (e.clientY - rect.top)  * (CH / rect.height);
+  const {x: wx, y: wy} = screenToWorld(sx, sy);
+  let hit = null;
+  for (const [key, pos] of Object.entries(NODE_POS)) {
+    const dx = wx - pos.x, dy = wy - pos.y;
+    if (dx*dx + dy*dy <= NR*NR) { hit = key; break; }
+  }
+  if (hit) {
+    const [aid, role] = hit.split(':');
+    openDetail(aid, role);
+  } else {
+    closeDetail();
+  }
+}
+
+// ═══════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════
+const PULSE_SPEED = 0.4; // fraction of path per second
+
+let lastFrameTime = 0;
+function animate(ts) {
+  const dt = Math.min((ts - lastFrameTime) / 1000, 0.1);
+  lastFrameTime = ts;
+
+  ctx.clearRect(0, 0, CW, CH);
+
+  // Background dot-grid fixed to screen (decorative, no camera needed)
+  drawGrid();
+
+  // Everything else lives in world space — apply camera transform
+  ctx.save();
+  ctx.translate(camera.x, camera.y);
+  ctx.scale(camera.scale, camera.scale);
+
+  drawZoneBoundaries();
+  drawGroupLabels();
+  drawConnections();
+  updatePulses(dt);
+  drawPulses();
+  drawNodes(dt);
+
+  ctx.restore();
+
+  // Column headers fixed at top of screen (screen space)
+  drawColumnHeaders();
+
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// ─────────────────────────────────────────
+// Grid
+// ─────────────────────────────────────────
+function drawGrid() {
+  ctx.fillStyle = '#0a1628';
+  const step = 30;
+  for (let x = 0; x < CW; x += step)
+    for (let y = 0; y < CH; y += step) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1, 0, Math.PI*2);
+      ctx.fill();
+    }
+}
+
+// ─────────────────────────────────────────
+// Zone boundary boxes (world space)
+// ─────────────────────────────────────────
+function drawZoneBoundaries() {
+  for (const zone of ZONES) {
+    const x = ZONE_PADDING_X - 10;
+    const y = zone.worldY - 4;
+    const w = ZONE_WIDTH;
+    const h = zone.worldHeight + 8;
+
+    // Subtle filled background
+    ctx.fillStyle = zone.color;
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Border
+    ctx.strokeStyle = zone.borderColor;
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6);
+    ctx.stroke();
+  }
+}
+
+// ─────────────────────────────────────────
+// Zone + group labels (world space)
+// ─────────────────────────────────────────
+function drawGroupLabels() {
+  for (const zone of ZONES) {
+    // Zone title bar
+    ctx.font      = 'bold 11px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillText(zone.label, ZONE_PADDING_X, zone.worldY + 20);
+
+    // Underline
+    ctx.strokeStyle = zone.borderColor;
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(ZONE_PADDING_X,     zone.worldY + 26);
+    ctx.lineTo(ZONE_WIDTH - 10,    zone.worldY + 26);
+    ctx.stroke();
+
+    // Group labels inside the zone
+    ctx.font      = '9px Courier New';
+    ctx.fillStyle = '#3a9ab8';
+    for (const grp of zone.groups) {
+      // Dashed separator above group
+      ctx.setLineDash([3, 7]);
+      ctx.strokeStyle = '#0d2040';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.moveTo(ZONE_PADDING_X,  grp.worldY - 2);
+      ctx.lineTo(ZONE_WIDTH - 10, grp.worldY - 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = '#3a9ab8';
+      ctx.fillText('GROUP ' + grp.label, ZONE_PADDING_X + 2, grp.worldY + 10);
+    }
+  }
+}
+
+// ─────────────────────────────────────────
+// Column headers — fixed screen-space overlay
+// ─────────────────────────────────────────
+function drawColumnHeaders() {
+  // Convert world column positions to screen
+  const toSX = wx => wx * camera.scale + camera.x;
+
+  ctx.font      = '10px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#3a9ab8';
+  ctx.fillText('EXAMINER',  toSX(EX_X), 16);
+  ctx.fillText('FORMULA',   toSX(FM_X), 16);
+  ctx.fillText('VALIDATOR', toSX(VL_X), 16);
+}
+
+// ─────────────────────────────────────────
+// Connection lines
+// ─────────────────────────────────────────
+function drawConnections() {
+  ctx.strokeStyle = '#0d3d52';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+
+  // Intra-agent connections
+  for (const aid of AGENT_IDS) {
+    const e = NODE_POS[aid+':exam'];
+    const f = NODE_POS[aid+':form'];
+    const v = NODE_POS[aid+':val'];
+    drawLine(e.x+NR, e.y, f.x-NR, f.y);
+    drawLine(f.x+NR, f.y, v.x-NR, v.y);
+  }
+
+  // Cross-agent data flow
+  ctx.strokeStyle = '#0d3d52';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3,6]);
+  for (const [from, to] of DATA_CONNS) {
+    const a = NODE_POS[from], b = NODE_POS[to];
+    if (!a || !b) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y+NR);
+    // bezier curves look nicer for cross connections
+    const cy = (a.y + b.y) / 2;
+    ctx.bezierCurveTo(a.x, cy, b.x, cy, b.x, b.y-NR);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawLine(x1,y1,x2,y2) {
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+}
+
+// ─────────────────────────────────────────
+// Pulses
+// ─────────────────────────────────────────
+function updatePulses(dt) {
+  for (const p of pulses) p.progress += dt * PULSE_SPEED;
+  pulses = pulses.filter(p => p.progress < 1.0);
+}
+
+function drawPulses() {
+  for (const p of pulses) {
+    const t  = Math.min(p.progress, 1);
+    const px = p.fx + (p.tx - p.fx) * t;
+    const py = p.fy + (p.ty - p.fy) * t;
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = 1 - t * 0.3;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ─────────────────────────────────────────
+// Nodes
+// ─────────────────────────────────────────
+function drawNodes(dt) {
+  const now = Date.now();
+
+  for (const aid of AGENT_IDS) {
+    const adata = latestMsg?.agents?.[aid];
+    const anomaly = adata?.validator?.anomaly_flag ?? 0;
+
+    for (const role of ['exam','form','val']) {
+      const key = aid+':'+role;
+      const pos = NODE_POS[key];
+      if (!pos) continue;
+
+      // Decay glow
+      nodeGlow[key] = Math.max(0, nodeGlow[key] - dt * (1/0.3));
+
+      const g    = nodeGlow[key];
+      const isFault = anomaly > 0.7;
+      const isWarn  = anomaly >= 0.3 && anomaly <= 0.7;
+
+      // Fault pulse: sin-wave opacity
+      let extraAlpha = 1;
+      if (isFault) extraAlpha = 0.5 + 0.5 * Math.sin(now * 0.00628); // 2 Hz
+
+      // Glow ring
+      if (g > 0.05 || isFault || isWarn) {
+        const glowColor = isFault ? '#ff3300' : isWarn ? '#ffaa00' : '#00ffcc';
+        ctx.save();
+        ctx.globalAlpha = (isFault ? 0.4 * extraAlpha : isWarn ? 0.35 : g * 0.5);
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, NR+10, 0, Math.PI*2);
+        ctx.fillStyle = glowColor;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Node fill
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, NR, 0, Math.PI*2);
+      ctx.fillStyle = g > 0.1 ? '#003322' : '#0a1e2e';
+      ctx.fill();
+
+      // Node stroke
+      const strokeColor = isFault ? '#ff3300' : isWarn ? '#ffaa00' : g > 0.1 ? '#00ffcc' : '#0d3d52';
+      const strokeW     = (g > 0.1 || isFault || isWarn) ? 2 : 1;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth   = strokeW;
+      ctx.globalAlpha = isFault ? extraAlpha : 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Text labels
+      ctx.textAlign = 'center';
+
+      // Top line: role label
+      let topLabel;
+      if (role === 'exam') topLabel = 'EXAM';
+      else if (role === 'form') topLabel = AGENT_SHORT[aid] ?? 'FORM';
+      else topLabel = 'VALID';
+      ctx.font = '9px Courier New';
+      ctx.fillStyle = g > 0.1 ? '#00ffcc' : '#7ab8cc';
+      ctx.fillText(topLabel, pos.x, pos.y - 5);
+
+      // Bottom line: current value (4 dp)
+      let valStr = '—';
+      if (role === 'form' && adata) {
+        valStr = (adata.formula?.output ?? 0).toFixed(4);
+      } else if (role === 'exam' && adata) {
+        const o = adata.examiner?.output ?? [1];
+        valStr = (o[0] ?? 1).toFixed(4);
+      } else if (role === 'val' && adata) {
+        valStr = 'p:'+(adata.validator?.plausibility??0).toFixed(4);
+      }
+      ctx.font = '8px Courier New';
+      ctx.fillStyle = '#c0e8f0';
+      ctx.fillText(valStr, pos.x, pos.y + 8);
+
+      // Selected highlight
+      if (selectedNode && selectedNode.aid === aid && selectedNode.role === role) {
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, NR+3, 0, Math.PI*2);
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4,3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
+  // Column headers
+  ctx.font = '9px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#3a9ab8';
+  ctx.fillText('EXAMINER', EX_X, 20);
+  ctx.fillText('FORMULA',  FM_X, 20);
+  ctx.fillText('VALIDATOR',VL_X, 20);
+}
+</script>
+</body>
+</html>

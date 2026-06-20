@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FAULTER·EI — Industrial AI Monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#060e18;--bg2:#0a1622;
+  --teal:#00dfa8;--blue:#0090d9;--amber:#d99200;--orange:#e05500;--red:#cc2800;
+  --text:#bdd4df;--muted:#3d6070;--faint:#0c1f2e;
+  --border:rgba(0,160,110,.1);--border2:rgba(0,120,180,.1)
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.6;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Space Grotesk',system-ui,sans-serif}
+a{color:inherit;text-decoration:none}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;height:56px;display:flex;align-items:center;padding:0 48px;gap:48px;background:rgba(6,14,24,.92);border-bottom:1px solid var(--border);backdrop-filter:blur(16px)}
+.logo{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:#fff;letter-spacing:.5px;flex-shrink:0}
+.logo em{color:var(--teal);font-style:normal}
+.nav-links{display:flex;gap:32px;flex:1}
+.nav-links a{font-size:13px;color:var(--muted);font-weight:500;transition:color .15s}
+.nav-links a:hover{color:var(--text)}
+.nav-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:600;padding:7px 18px;border:1px solid var(--teal);color:var(--teal);border-radius:4px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.nav-btn:hover{background:rgba(0,223,168,.08)}
+
+/* HERO */
+.hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:100px 48px 80px;overflow:hidden}
+#bg-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;cursor:grab}
+#bg-canvas:active{cursor:grabbing}
+.hero-fade{position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(6,14,24,.93) 34%,rgba(6,14,24,.42) 62%,transparent 100%)}
+.hero-content{position:relative;z-index:2;max-width:520px}
+.hero-eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:22px;font-weight:500;display:flex;align-items:center;gap:10px}
+.hero-eyebrow::before{content:'';width:20px;height:1px;background:var(--teal)}
+.hero h1{font-size:clamp(36px,5.5vw,62px);font-weight:700;color:#fff;line-height:1.1;margin-bottom:18px;letter-spacing:-.5px}
+.hero h1 em{color:var(--teal);font-style:normal}
+.hero-sub{font-size:16px;color:var(--muted);line-height:1.75;margin-bottom:36px;max-width:420px}
+.hero-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.btn-primary{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;padding:11px 26px;background:var(--teal);color:#000;border-radius:4px;cursor:pointer;border:none;transition:background .15s;display:inline-block}
+.btn-primary:hover{background:#00c898}
+.btn-ghost{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;transition:color .15s;font-weight:500}
+.btn-ghost:hover{color:var(--text)}
+
+/* FAULT BADGE — appears when a fault is active */
+#fault-badge{
+  position:absolute;bottom:160px;left:44px;z-index:3;
+  display:none;opacity:0;
+  background:rgba(6,14,24,.90);border-left:3px solid;
+  padding:14px 20px;border-radius:0 6px 6px 0;
+  backdrop-filter:blur(10px);min-width:210px;
+  transition:opacity .35s;pointer-events:none
+}
+#fault-badge.sev-warning {border-color:var(--amber);color:var(--amber)}
+#fault-badge.sev-fault   {border-color:var(--orange);color:var(--orange)}
+#fault-badge.sev-critical{border-color:var(--red);   color:var(--red)}
+.fb-sev {font-size:9px;letter-spacing:2.5px;text-transform:uppercase;font-weight:700;margin-bottom:5px}
+.fb-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:3px;font-family:'Space Grotesk',sans-serif}
+.fb-loc {font-size:11px;color:var(--muted);letter-spacing:.3px}
+
+/* EXPLORE HINT */
+#explore-hint{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  z-index:3;display:flex;align-items:center;gap:8px;
+  font-size:11px;color:var(--muted);letter-spacing:1.5px;
+  text-transform:uppercase;pointer-events:none;
+  transition:opacity .5s;white-space:nowrap
+}
+
+/* FAULT SEVERITY LEGEND */
+.fault-legend{position:absolute;bottom:44px;right:44px;z-index:2;display:flex;flex-direction:column;gap:9px;background:rgba(6,14,24,.78);border:1px solid var(--border);padding:14px 18px;border-radius:6px;backdrop-filter:blur(8px);pointer-events:none}
+.legend-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.legend-item{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted)}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ld-ok  {background:var(--teal)}
+.ld-warn{background:var(--amber); animation:blink 1.6s infinite}
+.ld-flt {background:var(--orange);animation:blink .95s infinite}
+.ld-crit{background:var(--red);   animation:blink .55s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+
+/* SECTIONS */
+section{padding:96px 48px}
+.max-w{max-width:1100px;margin:0 auto}
+.label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:16px;font-weight:500;display:block}
+h2{font-size:clamp(26px,3.5vw,40px);font-weight:700;color:#fff;line-height:1.15;letter-spacing:-.3px;margin-bottom:14px}
+.section-sub{font-size:15px;color:var(--muted);line-height:1.7;max-width:440px}
+
+/* PILLARS */
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:56px}
+.pillar{background:var(--bg);padding:40px 36px;transition:background .2s}
+.pillar:hover{background:var(--faint)}
+.pillar-bar{width:28px;height:2px;border-radius:1px;margin-bottom:32px}
+.b-teal{background:var(--teal)}.b-blue{background:var(--blue)}.b-amber{background:var(--amber)}
+.pillar-n{font-size:11px;color:var(--muted);letter-spacing:1px;display:block;margin-bottom:16px}
+.pillar h3{font-size:19px;font-weight:700;color:#fff;margin-bottom:12px;letter-spacing:-.2px}
+.pillar p{font-size:14px;color:var(--muted);line-height:1.75}
+
+/* HOW */
+.how{background:var(--bg2);padding:96px 48px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:56px;margin-top:56px}
+.step-n{font-family:'Space Grotesk',sans-serif;font-size:42px;font-weight:700;color:rgba(0,160,110,.12);line-height:1;margin-bottom:20px;display:block}
+.step h3{font-size:16px;font-weight:600;color:#fff;margin-bottom:10px}
+.step p{font-size:14px;color:var(--muted);line-height:1.75}
+
+/* CTA */
+.cta{padding:96px 48px;text-align:center;border-top:1px solid var(--border)}
+.cta h2{margin:0 auto 12px}
+.cta .section-sub{margin:0 auto 36px}
+.email-form{display:flex;gap:10px;max-width:400px;margin:0 auto;flex-wrap:wrap}
+.email-form input{flex:1;min-width:200px;background:rgba(0,223,168,.04);border:1px solid var(--border);color:var(--text);padding:11px 16px;border-radius:4px;font-family:'Inter',sans-serif;font-size:14px;outline:none}
+.email-form input::placeholder{color:var(--muted)}
+.email-form input:focus{border-color:rgba(0,223,168,.3)}
+.cta-note{font-size:12px;color:var(--muted);margin-top:14px}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:36px 48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer-logo{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:var(--muted)}
+.footer-logo em{color:var(--teal);font-style:normal}
+.footer-links{display:flex;gap:28px}
+.footer-links a{font-size:12px;color:var(--muted);transition:color .15s}
+.footer-links a:hover{color:var(--text)}
+footer p{font-size:12px;color:var(--muted)}
+.div{height:1px;background:var(--border)}
+
+/* RESPONSIVE */
+@media(max-width:800px){
+  nav{padding:0 20px;gap:16px}.nav-links{display:none}
+  .hero{padding:80px 20px 120px}.hero-fade{background:rgba(6,14,24,.90)}
+  .fault-legend{right:12px;bottom:16px;padding:10px 14px}
+  #fault-badge{left:16px;bottom:130px}
+  #explore-hint{display:none}
+  section{padding:64px 20px}
+  .pillars{grid-template-columns:1fr}.steps{grid-template-columns:1fr;gap:36px}
+  footer{padding:28px 20px;flex-direction:column;align-items:flex-start}.footer-links{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">FAULTER<em>·EI</em></div>
+  <div class="nav-links">
+    <a href="#platform">Platform</a>
+    <a href="#how">How it works</a>
+    <a href="#contact">Contact</a>
+  </div>
+  <a href="#contact" class="nav-btn">Request a demo</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="bg-canvas"></canvas>
+  <div class="hero-fade"></div>
+
+  <div class="hero-content">
+    <p class="hero-eyebrow">Industrial AI monitoring</p>
+    <h1>Catch the fault.<br>Not the <em>shutdown</em>.</h1>
+    <p class="hero-sub">Real-time anomaly detection and live 3D digital twin visualization for high-precision industrial machinery.</p>
+    <div class="hero-actions">
+      <a href="#contact" class="btn-primary">Request a demo</a>
+      <a href="/3dv2" class="btn-ghost">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="10" height="10" rx="1"/><path d="M5 7h4M7 5v4"/></svg>
+        View live twin
+      </a>
+    </div>
+  </div>
+
+  <!-- Fault name badge — shown when fault is active -->
+  <div id="fault-badge">
+    <div class="fb-sev">Warning</div>
+    <div class="fb-name">Bearing Wear</div>
+    <div class="fb-loc">NDE Bearing Housing</div>
+  </div>
+
+  <!-- Drag hint — fades after first interaction -->
+  <div id="explore-hint">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"><circle cx="7" cy="7" r="5"/><path d="M7 4v3l2 1"/></svg>
+    Drag to orbit &nbsp;·&nbsp; Scroll to zoom
+  </div>
+
+  <!-- Severity legend -->
+  <div class="fault-legend">
+    <p class="legend-title">Fault severity</p>
+    <div class="legend-item"><span class="legend-dot ld-ok"></span>Nominal</div>
+    <div class="legend-item"><span class="legend-dot ld-warn"></span>Warning</div>
+    <div class="legend-item"><span class="legend-dot ld-flt"></span>Fault</div>
+    <div class="legend-item"><span class="legend-dot ld-crit"></span>Critical</div>
+  </div>
+</section>
+
+<!-- PLATFORM -->
+<section id="platform">
+  <div class="max-w">
+    <span class="label">The platform</span>
+    <h2>Three things FAULTER does</h2>
+    <p class="section-sub">A layered AI system that monitors, visualizes, and alerts — before a fault becomes a stoppage.</p>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-bar b-teal"></div>
+        <span class="pillar-n">01 — Detect</span>
+        <h3>Anomaly engine</h3>
+        <p>A multi-layer AI agent pipeline continuously validates physics signals — velocity, tension, torque, temperature — and scores each subsystem for drift in real time.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-bar b-blue"></div>
+        <span class="pillar-n">02 — Visualize</span>
+        <h3>Live 3D digital twin</h3>
+        <p>Every component rendered as a live wireframe model. Fault scores propagate to geometry — affected parts illuminate in the fault's severity color as anomalies develop.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-bar b-amber"></div>
+        <span class="pillar-n">03 — Act</span>
+        <h3>Graded alerts</h3>
+        <p>Warning, fault, and critical — each with a full audit trail of which signals escalated and when. Operators see it before the line sees it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="div"></div>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="max-w">
+    <span class="label">How it works</span>
+    <h2>Sensor to insight</h2>
+    <div class="steps">
+      <div class="step">
+        <span class="step-n">01</span>
+        <h3>Connect</h3>
+        <p>Interfaces with existing drives, encoders, and sensor arrays. No hardware replacement required.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">02</span>
+        <h3>Analyze</h3>
+        <p>AI agents run physics validation and cross-signal correlation on every tick, producing a continuous health score per subsystem.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">03</span>
+        <h3>Respond</h3>
+        <p>The affected component lights up in the 3D twin before it becomes a production stop. Every escalation is logged with the full signal history.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="contact">
+  <div class="max-w">
+    <span class="label" style="display:block;text-align:center">Get in touch</span>
+    <h2>See it on your machine</h2>
+    <p class="section-sub" style="margin:0 auto 36px">We'll run a live demo with real simulation and fault injection against a digital twin of your equipment.</p>
+    <div class="email-form">
+      <input type="email" placeholder="Work email">
+      <button class="btn-primary">Request demo</button>
+    </div>
+    <p class="cta-note">No sales deck. Engineers only.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-logo">FAULTER<em>·EI</em></div>
+  <div class="footer-links">
+    <a href="#platform">Platform</a>
+    <a href="#how">How it works</a>
+    <a href="#contact">Contact</a>
+  </div>
+  <p>© 2026 FAULTER·EI</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+  const canvas  = document.getElementById('bg-canvas');
+  const badge   = document.getElementById('fault-badge');
+  const hint    = document.getElementById('explore-hint');
+  const hero    = canvas.parentElement;
+  let W = hero.clientWidth, H = hero.clientHeight;
+
+  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(W,H);
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(44,W/H,0.1,100);
+  camera.position.set(0.45, 0.75, 3.2);
+  camera.lookAt(0.45, 0.05, 0);
+
+  // OrbitControls — drag/scroll on the canvas
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.target.set(0.45, 0.05, 0);
+  controls.enableDamping   = true;
+  controls.dampingFactor   = 0.08;
+  controls.enableZoom      = false;
+  controls.enablePan       = false;
+  controls.autoRotate      = true;
+  controls.autoRotateSpeed = 0.55;
+  // Fade hint after first touch
+  canvas.addEventListener('pointerdown', ()=>{
+    hint.style.opacity='0';
+    setTimeout(()=>{hint.style.display='none';},500);
+  },{once:true});
+
+  // ── SEVERITY CONFIG ──────────────────────────────────────────────
+  const SEV = {
+    WARNING:  {color:0xd99200, hz:3.2,  cls:'sev-warning', label:'WARNING' },
+    FAULT:    {color:0xe05500, hz:5.6,  cls:'sev-fault',   label:'FAULT'   },
+    CRITICAL: {color:0xcc2800, hz:9.0,  cls:'sev-critical',label:'CRITICAL'}
+  };
+
+  // ── WIRE HELPER ──────────────────────────────────────────────────
+  function wire(geo, hex, op){
+    const m = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({color:hex, transparent:true, opacity:op===undefined?.84:op})
+    );
+    m.userData.bc = hex;
+    m.userData.bo = op===undefined?.84:op;
+    return m;
+  }
+  function add(mesh){ scene.add(mesh); return mesh; }
+
+  const C={dim:0x003322,teal:0x00dfa8,blue:0x0090d9,amber:0xd99200,grey:0x002838,mid:0x005544};
+
+  // ── MOTOR BODY (horizontal, shaft axis = X) ──────────────────────
+  const mBody = add(wire(new THREE.CylinderGeometry(0.20,0.20,0.86,28),C.teal,0.62));
+  mBody.rotation.z = Math.PI/2;
+
+  // Cooling fin rings (10 evenly spaced)
+  const faultFins=[];
+  for(let i=0;i<10;i++){
+    const f=add(wire(new THREE.TorusGeometry(0.226,0.007,4,22),C.dim,0.70));
+    f.rotation.y=Math.PI/2; f.position.x=-0.37+i*0.083;
+    if(i===3||i===7) faultFins.push(f);
+  }
+
+  // End bells (slightly wider than frame)
+  const ebNDE=add(wire(new THREE.CylinderGeometry(0.215,0.200,0.09,24),C.mid,0.80));
+  ebNDE.rotation.z=Math.PI/2; ebNDE.position.x=-0.475;
+  const ebDE =add(wire(new THREE.CylinderGeometry(0.215,0.200,0.09,24),C.mid,0.80));
+  ebDE.rotation.z=Math.PI/2;  ebDE.position.x= 0.475;
+
+  // Vent slots ring on end bells
+  [[-0.475,6],[0.475,6]].forEach(([x,n])=>{
+    for(let i=0;i<n;i++){
+      const a=(i/n)*Math.PI*2;
+      const v=add(wire(new THREE.BoxGeometry(0.09,0.012,0.005),C.dim,0.45));
+      v.rotation.y=Math.PI/2;
+      v.position.set(x,Math.sin(a)*0.14,Math.cos(a)*0.14);
+      v.rotation.x=a;
+    }
+  });
+
+  // Main shaft (spans full length through motor and into pump)
+  const shaft=add(wire(new THREE.CylinderGeometry(0.025,0.025,1.88,12),C.teal,0.90));
+  shaft.rotation.z=Math.PI/2;
+
+  // Nameplate (flat rect on top of motor body)
+  const nameplate=add(wire(new THREE.BoxGeometry(0.22,0.005,0.10),C.grey,0.55));
+  nameplate.position.set(-0.08,0.222,0.10);
+
+  // Terminal box (top)
+  const termBox=add(wire(new THREE.BoxGeometry(0.22,0.13,0.18),C.grey));
+  termBox.position.set(0,0.30,0);
+  // Conduit
+  const cond=add(wire(new THREE.CylinderGeometry(0.022,0.022,0.08,8),C.grey,0.55));
+  cond.position.set(0.04,0.41,0.04);
+
+  // Mounting feet (×2)
+  [-0.27,0.27].forEach(x=>{
+    const ft=add(wire(new THREE.BoxGeometry(0.14,0.05,0.52),C.dim));
+    ft.position.set(x,-0.225,0);
+    [-0.15,0.15].forEach(bz=>{
+      const b=add(wire(new THREE.CylinderGeometry(0.012,0.012,0.07,6),C.dim,0.48));
+      b.position.set(x,-0.265,bz);
+    });
+  });
+
+  // Bearing housings
+  const bhNDE=add(wire(new THREE.CylinderGeometry(0.055,0.055,0.055,16),C.grey,0.82));
+  bhNDE.rotation.z=Math.PI/2; bhNDE.position.x=-0.570;
+  const bhDE =add(wire(new THREE.CylinderGeometry(0.065,0.065,0.060,16),C.grey,0.82));
+  bhDE.rotation.z=Math.PI/2;  bhDE.position.x= 0.570;
+
+  // Grease nipples on bearings
+  [[-0.570,0.058],[ 0.570,0.068]].forEach(([x,r])=>{
+    const gn=add(wire(new THREE.CylinderGeometry(0.008,0.008,0.025,6),C.grey,0.55));
+    gn.position.set(x,r,0.04);
+  });
+
+  // NDE encoder + disc
+  const enc    =add(wire(new THREE.CylinderGeometry(0.052,0.052,0.040,16),C.blue,0.90));
+  enc.rotation.z=Math.PI/2; enc.position.x=-0.722;
+  const encDisc=add(wire(new THREE.CylinderGeometry(0.038,0.038,0.005,20),C.blue,0.62));
+  encDisc.rotation.z=Math.PI/2; encDisc.position.x=-0.700;
+
+  // Cooling fan group (NDE, counter-rotates to motor shaft)
+  const fanGroup=new THREE.Group(); fanGroup.position.x=-0.560; scene.add(fanGroup);
+  for(let i=0;i<4;i++){
+    const a=(i/4)*Math.PI*2;
+    const blade=wire(new THREE.BoxGeometry(0.012,0.130,0.035),C.dim,0.62);
+    blade.position.set(0,Math.sin(a)*0.095,Math.cos(a)*0.095);
+    blade.rotation.x=a; fanGroup.add(blade);
+  }
+  // Fan cover/guard
+  const fanGuard=add(wire(new THREE.TorusGeometry(0.175,0.007,4,18),C.dim,0.55));
+  fanGuard.rotation.y=Math.PI/2; fanGuard.position.x=-0.542;
+
+  // Rotor (ghost — very faint, adds depth)
+  const rotor=add(wire(new THREE.CylinderGeometry(0.132,0.132,0.82,24),C.teal,0.09));
+  rotor.rotation.z=Math.PI/2;
+
+  // Sensors
+  const vibSens=add(wire(new THREE.CylinderGeometry(0.017,0.017,0.042,8),C.blue,0.95));
+  vibSens.position.set(-0.570,0.248,0.038);
+  const tempSens=add(wire(new THREE.CylinderGeometry(0.010,0.010,0.072,6),C.amber,0.90));
+  tempSens.position.set(0.12,0.244,0.060);
+  // Sensor cable stub
+  const cPts=[new THREE.Vector3(-0.570,0.295,0.038),new THREE.Vector3(-0.570,0.430,0.038),new THREE.Vector3(-0.860,0.430,0.038)];
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(cPts),new THREE.LineBasicMaterial({color:C.grey,opacity:.32,transparent:true})));
+
+  // ── FLEXIBLE JAW COUPLING ────────────────────────────────────────
+  const coupA=add(wire(new THREE.CylinderGeometry(0.055,0.055,0.068,16),C.mid,0.85));
+  coupA.rotation.z=Math.PI/2; coupA.position.x=0.663;
+  const spider=add(wire(new THREE.TorusGeometry(0.048,0.013,3,6),C.amber,0.92));
+  spider.rotation.y=Math.PI/2; spider.position.x=0.703;
+  const coupB=add(wire(new THREE.CylinderGeometry(0.055,0.055,0.068,16),C.mid,0.85));
+  coupB.rotation.z=Math.PI/2; coupB.position.x=0.743;
+
+  // ── CENTRIFUGAL PUMP ─────────────────────────────────────────────
+  // Stub shaft / mechanical seal housing
+  const sealHouse=add(wire(new THREE.CylinderGeometry(0.068,0.068,0.160,16),C.mid,0.80));
+  sealHouse.rotation.z=Math.PI/2; sealHouse.position.x=0.882;
+  const sealGland=add(wire(new THREE.CylinderGeometry(0.054,0.054,0.018,12),C.grey,0.70));
+  sealGland.rotation.z=Math.PI/2; sealGland.position.x=0.962;
+
+  // Back cover
+  const backCover=add(wire(new THREE.CylinderGeometry(0.268,0.268,0.022,24),C.mid,0.72));
+  backCover.rotation.z=Math.PI/2; backCover.position.x=1.002;
+
+  // Pump volute casing (main body — recognisable round disc)
+  const pumpCasing=add(wire(new THREE.CylinderGeometry(0.262,0.262,0.200,24),C.teal,0.58));
+  pumpCasing.rotation.z=Math.PI/2; pumpCasing.position.x=1.112;
+
+  // Volute scroll bump (tangential discharge tongue — the "snail" feature)
+  const scrollBump=add(wire(new THREE.BoxGeometry(0.12,0.095,0.170),C.mid,0.68));
+  scrollBump.position.set(1.112, 0.298, 0);
+
+  // Front cover (with suction opening in centre → looks like a washer)
+  const frontRing=add(wire(new THREE.TorusGeometry(0.200,0.062,8,24),C.mid,0.72));
+  frontRing.rotation.y=Math.PI/2; frontRing.position.x=1.228;
+
+  // Impeller (spinning inside, faint — 6-sided = 6 blades suggestion)
+  const impeller=add(wire(new THREE.CylinderGeometry(0.200,0.200,0.100,6),C.teal,0.18));
+  impeller.rotation.z=Math.PI/2; impeller.position.x=1.112;
+  const impHub=add(wire(new THREE.CylinderGeometry(0.040,0.040,0.115,8),C.mid,0.18));
+  impHub.rotation.z=Math.PI/2; impHub.position.x=1.112;
+
+  // Suction nozzle — enters axially from right (+X), large bore
+  const suctPipe=add(wire(new THREE.CylinderGeometry(0.090,0.090,0.320,16),C.teal,0.68));
+  suctPipe.rotation.z=Math.PI/2; suctPipe.position.x=1.388;
+  const suctFlange=add(wire(new THREE.CylinderGeometry(0.138,0.138,0.022,16),C.mid,0.74));
+  suctFlange.rotation.z=Math.PI/2; suctFlange.position.x=1.552;
+  // Suction flange bolts (4)
+  for(let i=0;i<4;i++){
+    const a=(i/4)*Math.PI*2;
+    const fb=add(wire(new THREE.CylinderGeometry(0.008,0.008,0.024,6),C.dim,0.50));
+    fb.rotation.z=Math.PI/2;
+    fb.position.set(1.565,Math.sin(a)*0.110,Math.cos(a)*0.110);
+  }
+
+  // Discharge nozzle — exits upward (Y+) from top of volute
+  const dischPipe=add(wire(new THREE.CylinderGeometry(0.072,0.072,0.310,12),C.teal,0.68));
+  dischPipe.position.set(1.112,0.442,0);
+  // Elbow at top of discharge
+  const elbow=add(wire(new THREE.BoxGeometry(0.160,0.135,0.155),C.mid,0.62));
+  elbow.position.set(1.112,0.618,0);
+  // Discharge flange at top
+  const dischFlange=add(wire(new THREE.CylinderGeometry(0.110,0.110,0.022,12),C.mid,0.70));
+  dischFlange.position.set(1.112,0.700,0);
+  // Discharge flange bolts (4)
+  for(let i=0;i<4;i++){
+    const a=(i/4)*Math.PI*2+Math.PI/4;
+    const fb=add(wire(new THREE.CylinderGeometry(0.008,0.008,0.024,6),C.dim,0.50));
+    fb.position.set(1.112+Math.sin(a)*0.090,0.713,Math.cos(a)*0.090);
+  }
+  // Pressure gauge stub on discharge pipe
+  const gaugeStub=add(wire(new THREE.CylinderGeometry(0.016,0.016,0.055,8),C.grey,0.68));
+  gaugeStub.position.set(1.188,0.438,0.082);
+  const gaugeFace=add(wire(new THREE.CylinderGeometry(0.030,0.030,0.010,12),C.grey,0.62));
+  gaugeFace.position.set(1.196,0.464,0.096);
+  // Drain plug (bottom of pump)
+  const pumpDrain=add(wire(new THREE.CylinderGeometry(0.015,0.015,0.028,8),C.grey,0.60));
+  pumpDrain.position.set(1.112,-0.278,0.052);
+
+  // Pump support legs (×2 pairs)
+  [1.002,1.222].forEach(x=>{
+    [-0.220,0.220].forEach(z=>{
+      const leg=add(wire(new THREE.BoxGeometry(0.055,0.200,0.055),C.dim,0.55));
+      leg.position.set(x,-0.175,z);
+    });
+    const pad=add(wire(new THREE.BoxGeometry(0.080,0.040,0.480),C.dim,0.50));
+    pad.position.set(x,-0.248,0);
+  });
+
+  // ── BASEPLATE ────────────────────────────────────────────────────
+  const base=add(wire(new THREE.BoxGeometry(2.78,0.058,0.78),C.dim,0.72));
+  base.position.set(0.36,-0.316,0);
+  [-0.72,-0.22,0.38,1.02].forEach(x=>{
+    const rib=add(wire(new THREE.BoxGeometry(0.013,0.088,0.78),C.dim,0.38));
+    rib.position.set(x,-0.270,0);
+  });
+  [[-1.02,-0.348,-0.28],[-1.02,-0.348,0.28],[1.74,-0.348,-0.28],[1.74,-0.348,0.28]].forEach(([x,y,z])=>{
+    const ab=add(wire(new THREE.CylinderGeometry(0.013,0.013,0.160,6),C.dim,0.52));
+    ab.position.set(x,y,z);
+  });
+
+  // ── FAULT DEFINITIONS ────────────────────────────────────────────
+  const FAULT_DEFS = [
+    {
+      name:'Bearing Wear',
+      location:'NDE Bearing Housing',
+      severity:'WARNING',
+      parts:[bhNDE, vibSens]
+    },
+    {
+      name:'Drive-End Bearing Wear',
+      location:'DE Bearing Housing',
+      severity:'WARNING',
+      parts:[bhDE]
+    },
+    {
+      name:'Winding Overtemperature',
+      location:'Stator Windings',
+      severity:'CRITICAL',
+      parts:[mBody, tempSens, ...faultFins]
+    },
+    {
+      name:'Shaft Misalignment',
+      location:'Flexible Jaw Coupling',
+      severity:'FAULT',
+      parts:[coupA, spider, coupB]
+    },
+    {
+      name:'Mechanical Seal Failure',
+      location:'Pump Seal Housing',
+      severity:'FAULT',
+      parts:[sealHouse, sealGland]
+    },
+    {
+      name:'Impeller Cavitation',
+      location:'Pump Impeller',
+      severity:'WARNING',
+      parts:[pumpCasing, impeller, scrollBump]
+    },
+    {
+      name:'Encoder Signal Loss',
+      location:'Shaft Encoder (NDE)',
+      severity:'WARNING',
+      parts:[enc, encDisc]
+    },
+    {
+      name:'Terminal Box Overheat',
+      location:'Motor Terminal Box',
+      severity:'CRITICAL',
+      parts:[termBox]
+    },
+    {
+      name:'Suction Pressure Low',
+      location:'Suction Nozzle',
+      severity:'FAULT',
+      parts:[suctPipe, suctFlange]
+    },
+    {
+      name:'Discharge Pressure High',
+      location:'Discharge Line',
+      severity:'WARNING',
+      parts:[dischPipe, elbow, dischFlange]
+    }
+  ];
+
+  // ── FAULT SIMULATION STATE ───────────────────────────────────────
+  let activeFault  = null;
+  let countdown    = 110;
+  let holding      = false;
+
+  function triggerFault(){
+    activeFault = FAULT_DEFS[Math.floor(Math.random()*FAULT_DEFS.length)];
+    holding     = true;
+    countdown   = 65 + Math.floor(Math.random()*90);
+    // Show badge
+    const s = SEV[activeFault.severity];
+    badge.className     = s.cls;
+    badge.querySelector('.fb-sev').textContent  = s.label;
+    badge.querySelector('.fb-name').textContent = activeFault.name;
+    badge.querySelector('.fb-loc').textContent  = activeFault.location;
+    badge.style.display = 'block';
+    requestAnimationFrame(()=>{ badge.style.opacity='1'; });
+  }
+
+  function clearFault(){
+    if(activeFault){
+      activeFault.parts.forEach(m=>{
+        m.material.color.setHex(m.userData.bc);
+        m.material.opacity = m.userData.bo;
+      });
+      activeFault = null;
+    }
+    holding   = false;
+    countdown = 88 + Math.floor(Math.random()*88);
+    badge.style.opacity = '0';
+    setTimeout(()=>{ badge.style.display='none'; }, 380);
+  }
+
+  // ── ANIMATE ──────────────────────────────────────────────────────
+  let t = 0;
+  function animate(){
+    requestAnimationFrame(animate);
+    t += 0.012;
+    controls.update(); // required for damping + autoRotate
+
+    // Motor shaft → all shaft-coupled parts spin together
+    const ang = t * 0.022;
+    shaft.rotation.x    = ang;
+    enc.rotation.x      = ang;
+    encDisc.rotation.x  = ang;
+    rotor.rotation.x    = ang;
+    coupA.rotation.x    = ang;
+    spider.rotation.x   = ang;
+    coupB.rotation.x    = ang;
+    impeller.rotation.x = ang;
+    impHub.rotation.x   = ang;
+
+    // Fan counter-rotates (cooling fan runs opposite to motor shaft)
+    fanGroup.rotation.x = -ang * 1.15;
+
+    // Fault cycle
+    countdown--;
+    if(countdown <= 0){
+      if(holding) clearFault();
+      else        triggerFault();
+    }
+
+    // Pulse the faulty parts in their severity color
+    if(holding && activeFault){
+      const s = SEV[activeFault.severity];
+      // pulse: fast hz = more urgent, deeper opacity swing
+      const pulse = 0.22 + 0.78 * Math.abs(Math.sin(t * s.hz));
+      activeFault.parts.forEach(m=>{
+        m.material.color.setHex(s.color);
+        m.material.opacity = pulse;
+      });
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize',()=>{
+    W=hero.clientWidth; H=hero.clientHeight;
+    camera.aspect=W/H; camera.updateProjectionMatrix();
+    renderer.setSize(W,H);
+  });
+})();
+</script>
+</body>
+</html>

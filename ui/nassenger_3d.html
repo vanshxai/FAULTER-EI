@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nassenger 8 — 3D Holographic Twin</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #020810; overflow: hidden; font-family: 'Courier New', monospace; color: #00ffcc; }
+
+  #canvas-container { position: fixed; inset: 0; }
+
+  /* HUD overlay */
+  #hud {
+    position: fixed; inset: 0; pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Title bar */
+  #title-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 14px 24px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+    display: flex; align-items: center; gap: 16px;
+  }
+  #title-bar h1 {
+    font-size: 18px; letter-spacing: 4px; text-transform: uppercase;
+    color: #00ffcc; text-shadow: 0 0 12px #00ffcc80;
+  }
+  #title-bar .subtitle {
+    font-size: 11px; color: #00ffcc60; letter-spacing: 2px;
+  }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88;
+    animation: pulse-dot 2s ease-in-out infinite;
+    margin-left: auto;
+  }
+  #status-label { font-size: 11px; color: #00ff8880; letter-spacing: 1px; }
+
+  /* Controls legend */
+  #controls-legend {
+    position: absolute; bottom: 24px; left: 24px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid #00ffcc20;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 11px; line-height: 2;
+    color: #00ffcc80;
+    pointer-events: none;
+  }
+  #controls-legend span { color: #00ffcc; margin-right: 6px; }
+
+  /* Part info panel */
+  #part-info {
+    position: absolute; bottom: 24px; right: 24px;
+    width: 280px;
+    background: rgba(2, 8, 16, 0.9);
+    border: 1px solid #00ffcc30;
+    border-radius: 10px;
+    padding: 16px;
+    transition: opacity 0.2s;
+    opacity: 0;
+  }
+  #part-info.visible { opacity: 1; }
+  #part-info h3 {
+    font-size: 13px; letter-spacing: 2px; color: #00ffcc;
+    margin-bottom: 8px; text-transform: uppercase;
+  }
+  #part-info .part-id { font-size: 10px; color: #00ffcc50; margin-bottom: 10px; }
+  #part-info .metrics { font-size: 11px; line-height: 1.9; color: #88cccc; }
+  #part-info .metrics .label { color: #00ffcc60; }
+  #part-info .status-badge {
+    display: inline-block; margin-top: 10px;
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 10px; letter-spacing: 1px;
+    border: 1px solid currentColor;
+  }
+  #part-info .status-badge.nominal { color: #00ff88; }
+  #part-info .status-badge.warning { color: #ffaa00; }
+  #part-info .status-badge.fault   { color: #ff3300; }
+
+  /* Anomaly bar */
+  #anomaly-bar {
+    position: absolute; top: 64px; left: 24px; right: 24px;
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .anomaly-chip {
+    font-size: 9px; padding: 3px 8px; border-radius: 4px;
+    border: 1px solid #00ffcc20;
+    color: #00ffcc60; letter-spacing: 1px;
+    transition: all 0.3s;
+  }
+  .anomaly-chip.warning { border-color: #ffaa00; color: #ffaa00; text-shadow: 0 0 6px #ffaa0060; }
+  .anomaly-chip.fault   { border-color: #ff3300; color: #ff3300; text-shadow: 0 0 8px #ff330080; }
+
+  /* Tooltip on hover */
+  #hover-tip {
+    position: absolute;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid #00ffcc40;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px; color: #00ffcc;
+    pointer-events: none;
+    opacity: 0; transition: opacity 0.15s;
+    white-space: nowrap;
+    z-index: 20;
+  }
+  #hover-tip.show { opacity: 1; }
+
+  /* Scanline effect */
+  #scanline {
+    position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 204, 0.015) 2px,
+      rgba(0, 255, 204, 0.015) 4px
+    );
+  }
+
+  /* Demo mode badge */
+  #demo-badge {
+    position: absolute; top: 14px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px; letter-spacing: 2px;
+    color: #ffaa00; border: 1px solid #ffaa0040;
+    padding: 3px 12px; border-radius: 4px;
+    display: none;
+  }
+  #demo-badge.show { display: block; }
+
+  /* Space key hint */
+  #spin-hint {
+    position: absolute; top: 64px; right: 24px;
+    font-size: 10px; color: #00ffcc30; letter-spacing: 1px;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+</style>
+</head>
+<body>
+
+<div id="scanline"></div>
+<div id="canvas-container"></div>
+
+<div id="hud">
+  <div id="title-bar">
+    <div>
+      <h1>Nassenger 8</h1>
+      <div class="subtitle">KONICA MINOLTA · INDUSTRIAL TEXTILE INKJET · DIGITAL TWIN</div>
+    </div>
+    <div id="status-dot"></div>
+    <div id="status-label">LIVE</div>
+  </div>
+
+  <div id="demo-badge">DEMO MODE</div>
+  <div id="spin-hint">[SPACE] pause rotation</div>
+
+  <div id="anomaly-bar" id="anomaly-bar"></div>
+
+  <div id="controls-legend">
+    <div><span>LEFT DRAG</span> Orbit</div>
+    <div><span>RIGHT DRAG</span> Pan</div>
+    <div><span>SCROLL</span> Zoom</div>
+    <div><span>CLICK</span> Inspect part</div>
+    <div><span>SPACE</span> Toggle auto-rotate</div>
+  </div>
+
+  <div id="part-info">
+    <h3 id="pi-name">—</h3>
+    <div class="part-id" id="pi-id">—</div>
+    <div class="metrics" id="pi-metrics">—</div>
+    <div class="status-badge nominal" id="pi-badge">NOMINAL</div>
+  </div>
+
+  <div id="hover-tip"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// ─── Machine geometry constants (metres) ──────────────────────────────────────
+const MACHINE = { L: 5.08, W: 2.04, H: 2.01 };
+
+// ─── Part definitions ─────────────────────────────────────────────────────────
+// Each part: id, label, color, geometry type, pos [x,y,z], size [w,h,d]
+// Origin: centre of machine floor
+const PARTS = [
+  {
+    id: 'P_FRAME',   label: 'Main Frame',
+    color: 0x00ffcc, type: 'box',
+    pos: [0, MACHINE.H / 2, 0],
+    size: [MACHINE.L, MACHINE.H, MACHINE.W],
+    desc: 'Steel welded frame — 5.08 × 2.04 × 2.01 m',
+  },
+  {
+    id: 'P101',      label: 'Fabric Unwind Roll',
+    color: 0xff00ff, type: 'cylinder',
+    pos: [-2.2, 0.95, 0],
+    size: [0.30, 1.85, 0.30],   // radiusTop, height, radiusBot
+    desc: 'P101 · r_max=300mm · rho=1232 kg/m³',
+  },
+  {
+    id: 'P_WINDER',  label: 'Fabric Take-up Winder',
+    color: 0x0088ff, type: 'cylinder',
+    pos: [2.2, 0.95, 0],
+    size: [0.20, 1.85, 0.20],
+    desc: 'Take-up roll · independent drive',
+  },
+  {
+    id: 'P_RAIL',    label: 'Carriage Rail',
+    color: 0x00ccff, type: 'box',
+    pos: [0, 1.75, -0.30],
+    size: [4.20, 0.06, 0.06],
+    desc: 'Precision linear guide · 4.2 m span',
+  },
+  {
+    id: 'P_CARRIAGE', label: 'Print Carriage',
+    color: 0xaaff00, type: 'box',
+    pos: [0, 1.60, -0.30],
+    size: [0.45, 0.22, 0.35],
+    desc: 'Bi-directional carriage · animated',
+    animated: true,
+  },
+  {
+    id: 'P_HEADS',   label: 'Print Head Array',
+    color: 0xffffff, type: 'box',
+    pos: [0, 1.47, -0.30],
+    size: [0.42, 0.08, 0.28],
+    desc: 'KM1024 heads · 1200 dpi · 8 color',
+    animated: true,
+  },
+  {
+    id: 'P_BELT',    label: 'Media Transport Belt',
+    color: 0x00ffaa, type: 'box',
+    pos: [0, 0.82, 0],
+    size: [4.00, 0.04, 1.70],
+    desc: 'Sticky belt transport · vacuum platen',
+  },
+  {
+    id: 'P_TENSION1', label: 'Entry Tension Roll',
+    color: 0x88ccff, type: 'cylinder',
+    pos: [-1.80, 1.10, 0],
+    size: [0.05, 1.80, 0.05],
+    desc: 'Entry nip · tension regulation',
+  },
+  {
+    id: 'P_TENSION2', label: 'Exit Tension Roll',
+    color: 0x88ccff, type: 'cylinder',
+    pos: [1.80, 1.10, 0],
+    size: [0.05, 1.80, 0.05],
+    desc: 'Exit nip · tension regulation',
+  },
+  {
+    id: 'P_INKBANK', label: 'Ink Supply Bank',
+    color: 0x8800ff, type: 'box',
+    pos: [0, 0.60, -0.80],
+    size: [2.40, 0.80, 0.30],
+    desc: '8 × 2L ink cartridge bank · CMYK+4',
+  },
+  {
+    id: 'P_CABINET', label: 'Control Cabinet',
+    color: 0xff8800, type: 'box',
+    pos: [2.30, 0.75, -0.70],
+    size: [0.50, 1.50, 0.40],
+    desc: 'Main controller · drives · HMI',
+  },
+  {
+    id: 'P_DRYER',   label: 'Drying / Heater Unit',
+    color: 0xff4400, type: 'box',
+    pos: [0, 0.62, 0.70],
+    size: [3.50, 0.80, 0.40],
+    desc: 'IR + hot-air drying · 60–120 °C',
+  },
+];
+
+// ─── WebSocket / anomaly state ────────────────────────────────────────────────
+let anomalyState = {};   // partId → score 0..1
+let selectedPart = null;
+let wsConnected   = false;
+let demoMode      = false;
+let autoRotate    = true;
+
+// ─── Three.js setup ──────────────────────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const W = window.innerWidth, H = window.innerHeight;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W, H);
+renderer.setClearColor(0x020810, 1);
+container.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, W / H, 0.01, 200);
+camera.position.set(5, 4, 7);
+camera.lookAt(0, 1, 0);
+
+// Ambient + directional light (won't show on wireframes, but needed for fog etc.)
+scene.fog = new THREE.FogExp2(0x020810, 0.035);
+
+// ─── Grid floor ──────────────────────────────────────────────────────────────
+const gridHelper = new THREE.GridHelper(20, 40, 0x00ffcc10, 0x00ffcc08);
+gridHelper.position.y = 0;
+scene.add(gridHelper);
+
+// ─── Build part meshes ────────────────────────────────────────────────────────
+const partMeshMap   = {};  // id → edges mesh
+const partBoundMap  = {};  // id → invisible bbox mesh for raycasting
+const partColorBase = {};  // id → original hex
+
+function buildEdges(geom, color) {
+  const edges = new THREE.EdgesGeometry(geom);
+  const mat   = new THREE.LineBasicMaterial({ color, linewidth: 1 });
+  return new THREE.LineSegments(edges, mat);
+}
+
+PARTS.forEach(p => {
+  let mesh;
+  if (p.type === 'box') {
+    const geom = new THREE.BoxGeometry(...p.size);
+    mesh = buildEdges(geom, p.color);
+  } else {
+    // cylinder — r_top, height, r_bot, segs
+    const geom = new THREE.CylinderGeometry(p.size[0], p.size[2], p.size[1], 16);
+    mesh = buildEdges(geom, p.color);
+  }
+  mesh.position.set(...p.pos);
+  mesh.userData.partId = p.id;
+  scene.add(mesh);
+  partMeshMap[p.id]   = mesh;
+  partColorBase[p.id] = p.color;
+
+  // Invisible bounding box for raycasting
+  const bSize = p.type === 'box'
+    ? p.size
+    : [p.size[0] * 2, p.size[1], p.size[2] * 2];
+  const bGeom = new THREE.BoxGeometry(...bSize);
+  const bMat  = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+  const bound = new THREE.Mesh(bGeom, bMat);
+  bound.position.set(...p.pos);
+  bound.userData.partId = p.id;
+  scene.add(bound);
+  partBoundMap[p.id] = bound;
+});
+
+// ─── Fabric path ──────────────────────────────────────────────────────────────
+{
+  const pts = [
+    new THREE.Vector3(-2.2,  0.95,  0),   // unwind roll
+    new THREE.Vector3(-1.80, 1.10,  0),   // entry tension
+    new THREE.Vector3(-1.00, 0.86,  0),   // belt entry
+    new THREE.Vector3( 1.00, 0.86,  0),   // belt exit
+    new THREE.Vector3( 1.80, 1.10,  0),   // exit tension
+    new THREE.Vector3( 2.2,  0.95,  0),   // winder
+  ];
+  const geom = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat  = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.30 });
+  scene.add(new THREE.Line(geom, mat));
+}
+
+// ─── Manual orbit controls ────────────────────────────────────────────────────
+let orbitTarget = new THREE.Vector3(0, 1, 0);
+let spherical   = new THREE.Spherical();
+{
+  const v = new THREE.Vector3().subVectors(camera.position, orbitTarget);
+  spherical.setFromVector3(v);
+}
+
+const mouse = { x: 0, y: 0, buttons: 0, moved: false };
+let isDragging = false, lastX = 0, lastY = 0;
+
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+renderer.domElement.addEventListener('mousedown', e => {
+  isDragging = true;
+  lastX = e.clientX; lastY = e.clientY;
+  mouse.moved = false;
+  mouse.buttons = e.buttons;
+});
+
+renderer.domElement.addEventListener('mousemove', e => {
+  if (isDragging) {
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) mouse.moved = true;
+
+    if (e.buttons === 1) {
+      // Left drag — orbit
+      spherical.theta -= dx * 0.006;
+      spherical.phi   -= dy * 0.006;
+      spherical.phi    = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi));
+    } else if (e.buttons === 2) {
+      // Right drag — pan
+      const pan = new THREE.Vector3(-dx * 0.004, dy * 0.004, 0);
+      pan.applyQuaternion(camera.quaternion);
+      orbitTarget.add(pan);
+    }
+    lastX = e.clientX; lastY = e.clientY;
+  }
+
+  // Hover tooltip
+  const ndcX = (e.clientX / window.innerWidth)  *  2 - 1;
+  const ndcY = (e.clientY / window.innerHeight) * -2 + 1;
+  handleHover(ndcX, ndcY, e.clientX, e.clientY);
+});
+
+renderer.domElement.addEventListener('mouseup', e => {
+  if (!mouse.moved) {
+    const ndcX = (e.clientX / window.innerWidth)  *  2 - 1;
+    const ndcY = (e.clientY / window.innerHeight) * -2 + 1;
+    handleClick(ndcX, ndcY);
+  }
+  isDragging = false;
+});
+
+renderer.domElement.addEventListener('wheel', e => {
+  spherical.radius = Math.max(2, Math.min(30, spherical.radius + e.deltaY * 0.01));
+}, { passive: true });
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); autoRotate = !autoRotate; }
+});
+
+// ─── Raycasting ───────────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+
+function getBounds() {
+  return Object.values(partBoundMap);
+}
+
+function partFromIntersect(hits) {
+  for (const h of hits) {
+    const id = h.object.userData.partId;
+    if (id) return id;
+  }
+  return null;
+}
+
+function handleHover(ndcX, ndcY, cx, cy) {
+  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  const hits = raycaster.intersectObjects(getBounds());
+  const id   = partFromIntersect(hits);
+  const tip  = document.getElementById('hover-tip');
+  if (id) {
+    const p = PARTS.find(x => x.id === id);
+    tip.textContent = p.label;
+    tip.style.left  = (cx + 14) + 'px';
+    tip.style.top   = (cy - 10) + 'px';
+    tip.classList.add('show');
+  } else {
+    tip.classList.remove('show');
+  }
+}
+
+function handleClick(ndcX, ndcY) {
+  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  const hits = raycaster.intersectObjects(getBounds());
+  const id   = partFromIntersect(hits);
+  selectedPart = id || null;
+  updatePartInfoPanel();
+}
+
+// ─── Part info panel ──────────────────────────────────────────────────────────
+function updatePartInfoPanel() {
+  const panel = document.getElementById('part-info');
+  if (!selectedPart) { panel.classList.remove('visible'); return; }
+
+  const p     = PARTS.find(x => x.id === selectedPart);
+  const score = anomalyState[selectedPart] || 0;
+  const health = score > 0.7 ? 'fault' : score > 0.3 ? 'warning' : 'nominal';
+  const hLabel = health.toUpperCase();
+
+  document.getElementById('pi-name').textContent = p.label;
+  document.getElementById('pi-id').textContent   = p.id;
+
+  let metrics = `<div><span class="label">DESC  </span>${p.desc}</div>`;
+  metrics += `<div><span class="label">ANOMALY</span>${(score * 100).toFixed(1)}%</div>`;
+
+  // Live data for P101
+  if (p.id === 'P101') {
+    metrics += `<div><span class="label">r_next    </span>${liveVals.r_next   ?? '—'} m</div>`;
+    metrics += `<div><span class="label">v_fabric  </span>${liveVals.v_fabric ?? '—'} m/s</div>`;
+    metrics += `<div><span class="label">depletion </span>${liveVals.depletion_pct ?? '—'}%</div>`;
+  }
+
+  document.getElementById('pi-metrics').innerHTML = metrics;
+
+  const badge = document.getElementById('pi-badge');
+  badge.textContent = hLabel;
+  badge.className   = `status-badge ${health}`;
+
+  panel.classList.add('visible');
+}
+
+// ─── Live values cache (for info panel) ──────────────────────────────────────
+const liveVals = {};
+
+// ─── Anomaly color update ─────────────────────────────────────────────────────
+function applyAnomalyColors(t) {
+  PARTS.forEach(p => {
+    const mesh  = partMeshMap[p.id];
+    if (!mesh) return;
+    const score = anomalyState[p.id] || 0;
+    let color;
+    if (score > 0.7) {
+      // Red + pulse
+      const pulse = 0.3 + 0.7 * (Math.sin(t * 0.002) * 0.5 + 0.5);
+      const r = Math.floor(255);
+      const g = Math.floor(51  * (1 - pulse));
+      const b = Math.floor(0);
+      color = (r << 16) | (g << 8) | b;
+      mesh.material.opacity = pulse;
+      mesh.material.transparent = true;
+    } else if (score > 0.3) {
+      color = 0xffaa00;
+      mesh.material.opacity = 1;
+      mesh.material.transparent = false;
+    } else {
+      color = p.color;
+      mesh.material.opacity = 1;
+      mesh.material.transparent = false;
+    }
+    mesh.material.color.setHex(color);
+  });
+}
+
+// ─── Anomaly bar chips ────────────────────────────────────────────────────────
+function updateAnomalyBar() {
+  const bar = document.getElementById('anomaly-bar');
+  bar.innerHTML = '';
+  PARTS.forEach(p => {
+    const score  = anomalyState[p.id] || 0;
+    if (score < 0.05) return;
+    const cls    = score > 0.7 ? 'fault' : 'warning';
+    const chip   = document.createElement('div');
+    chip.className = `anomaly-chip ${cls}`;
+    chip.textContent = p.id + ' ' + (score * 100).toFixed(0) + '%';
+    chip.addEventListener('click', () => { selectedPart = p.id; updatePartInfoPanel(); });
+    chip.style.pointerEvents = 'auto';
+    bar.appendChild(chip);
+  });
+}
+
+// ─── WebSocket ───────────────────────────────────────────────────────────────
+function connectWS() {
+  let ws;
+  try {
+    ws = new WebSocket('ws://localhost:8000/ws');
+  } catch(e) {
+    startDemoMode();
+    return;
+  }
+
+  ws.onopen = () => {
+    wsConnected = true;
+    demoMode    = false;
+    document.getElementById('demo-badge').classList.remove('show');
+    document.getElementById('status-dot').style.background    = '#00ff88';
+    document.getElementById('status-dot').style.boxShadow     = '0 0 8px #00ff88';
+    document.getElementById('status-label').textContent       = 'LIVE';
+    document.getElementById('status-label').style.color       = '#00ff8880';
+  };
+
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'tick') {
+        // Map agent anomalies to parts
+        const am = msg.anomaly_map || {};
+        anomalyState['P101']   = am['P101_r_next']    || am['P101_v_fabric'] || 0;
+        anomalyState['P_BELT'] = am['P101_depletion'] || 0;
+
+        // Spread some anomaly scores to visually interesting parts
+        const agentIds = Object.keys(am);
+        agentIds.forEach((aid, i) => {
+          const partId = PARTS[i % PARTS.length]?.id;
+          if (partId && partId !== 'P101') {
+            anomalyState[partId] = Math.max(anomalyState[partId] || 0, am[aid] * 0.4);
+          }
+        });
+
+        // Cache live values
+        const bb = msg.blackboard || {};
+        liveVals.r_next        = bb.r_next;
+        liveVals.v_fabric      = bb.v_fabric;
+        liveVals.depletion_pct = bb.depletion_pct;
+
+        updateAnomalyBar();
+        if (selectedPart) updatePartInfoPanel();
+      }
+    } catch {}
+  };
+
+  ws.onclose = () => {
+    wsConnected = false;
+    startDemoMode();
+    setTimeout(connectWS, 4000);
+  };
+
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+// ─── Demo mode ────────────────────────────────────────────────────────────────
+let demoInterval = null;
+let demoIdx      = 0;
+
+function startDemoMode() {
+  if (demoMode) return;
+  demoMode = true;
+  document.getElementById('demo-badge').classList.add('show');
+  document.getElementById('status-dot').style.background = '#ffaa00';
+  document.getElementById('status-dot').style.boxShadow  = '0 0 8px #ffaa00';
+  document.getElementById('status-label').textContent    = 'DEMO';
+  document.getElementById('status-label').style.color    = '#ffaa0080';
+
+  if (demoInterval) clearInterval(demoInterval);
+  demoInterval = setInterval(() => {
+    // Reset all
+    PARTS.forEach(p => { anomalyState[p.id] = 0; });
+
+    // Cycle anomaly through parts
+    const part1 = PARTS[demoIdx % PARTS.length];
+    const part2 = PARTS[(demoIdx + 2) % PARTS.length];
+    anomalyState[part1.id] = 0.35 + Math.random() * 0.5;
+    anomalyState[part2.id] = 0.15 + Math.random() * 0.25;
+
+    // Simulate P101 values
+    liveVals.r_next        = (0.1 + Math.random() * 0.2).toFixed(4);
+    liveVals.v_fabric      = (0.1 + Math.random() * 0.3).toFixed(4);
+    liveVals.depletion_pct = (20 + Math.random() * 60).toFixed(2);
+
+    demoIdx++;
+    updateAnomalyBar();
+    if (selectedPart) updatePartInfoPanel();
+  }, 3000);
+}
+
+// ─── Animation loop ───────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+let simTime = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  simTime += delta;
+  const now = Date.now();
+
+  // Auto-rotate
+  if (autoRotate) {
+    spherical.theta += 0.001;
+  }
+
+  // Update camera from spherical
+  const pos = new THREE.Vector3().setFromSpherical(spherical).add(orbitTarget);
+  camera.position.copy(pos);
+  camera.lookAt(orbitTarget);
+
+  // Animate print carriage (oscillates X)
+  const cx = 0.5 + Math.sin(simTime * 0.5) * 0.8 * 2;  // ±1.6m range on rail
+  if (partMeshMap['P_CARRIAGE']) {
+    partMeshMap['P_CARRIAGE'].position.x = cx;
+    partBoundMap['P_CARRIAGE'].position.x = cx;
+  }
+  if (partMeshMap['P_HEADS']) {
+    partMeshMap['P_HEADS'].position.x = cx;
+    partBoundMap['P_HEADS'].position.x = cx;
+  }
+
+  // Animate winder roll (rotate around Y axis)
+  if (partMeshMap['P_WINDER']) {
+    partMeshMap['P_WINDER'].rotation.y += 0.02;
+  }
+  // Animate unwind roll (rotate opposite, slower as it depletes)
+  if (partMeshMap['P101']) {
+    partMeshMap['P101'].rotation.y -= 0.018;
+  }
+  // Tension rolls rotate
+  if (partMeshMap['P_TENSION1']) partMeshMap['P_TENSION1'].rotation.y += 0.03;
+  if (partMeshMap['P_TENSION2']) partMeshMap['P_TENSION2'].rotation.y += 0.03;
+
+  // Anomaly colors
+  applyAnomalyColors(now);
+
+  renderer.render(scene, camera);
+}
+
+// ─── Resize handler ───────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+connectWS();
+setTimeout(() => {
+  if (!wsConnected) startDemoMode();
+}, 2000);
+
+animate();
+
+/*
+  NOTE: To serve this file via the FastAPI backend, add the following route
+  to server/main.py:
+
+    @app.get("/3d", response_class=HTMLResponse)
+    async def serve_3d():
+        html_path = Path(__file__).parent.parent / "ui" / "nassenger_3d.html"
+        return html_path.read_text(encoding="utf-8")
+*/
+</script>
+</body>
+</html>

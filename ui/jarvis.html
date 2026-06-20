@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS / NASSENGER 8</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --nb: #131928;
+      --nd: #0a0f1a;
+      --nl: #1c2538;
+      --nr: 5px 5px 10px var(--nd), -5px -5px 10px var(--nl);
+      --ni: inset 4px 4px 8px var(--nd), inset -4px -4px 8px var(--nl);
+    }
+
+    body {
+      background: var(--nb);
+      color: #c0e8f0;
+      font-family: monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ─────────────────────────────────────── */
+    #header {
+      height: 44px;
+      flex-shrink: 0;
+      background: var(--nb);
+      box-shadow: 0 5px 10px var(--nd), 0 -2px 5px var(--nl);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    #header-title {
+      font-size: 13px;
+      color: #00ffcc;
+      letter-spacing: 2px;
+      text-shadow: 0 0 12px rgba(0,255,204,0.3);
+    }
+
+    #header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    #conn-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+    }
+
+    #conn-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    #conn-dot.online {
+      background: #00ffcc;
+      box-shadow: 0 0 6px rgba(0,255,204,0.6);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    #conn-dot.offline {
+      background: #ff3300;
+      box-shadow: 0 0 6px rgba(255,51,0,0.5);
+      animation: none;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    #nav-link { font-size: 11px; color: #3a5a6a; text-decoration: none; letter-spacing: 1px; }
+    #nav-link:hover { color: #00ffcc; }
+
+    /* ── MAIN AREA ──────────────────────────────────── */
+    #main { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── STATUS PANEL (left 35%) ────────────────────── */
+    #status-panel {
+      width: 35%;
+      flex-shrink: 0;
+      padding: 14px 12px;
+      overflow-y: auto;
+      background: var(--nb);
+    }
+
+    #status-panel::-webkit-scrollbar       { width: 4px; }
+    #status-panel::-webkit-scrollbar-track { background: var(--nb); }
+    #status-panel::-webkit-scrollbar-thumb { background: var(--nl); border-radius: 2px; }
+
+    .card {
+      background: var(--nb);
+      border-left: 3px solid #00ffcc;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 10px;
+      box-shadow: var(--nr);
+    }
+
+    .card-title {
+      font-size: 10px;
+      color: #3a5a6a;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 5px;
+    }
+
+    .card-value { font-size: 18px; font-weight: bold; color: #00ffcc; line-height: 1.2; }
+    .card-sub   { font-size: 11px; color: #3a5a6a; margin-top: 4px; }
+
+    /* ── LOG PANEL (right 65%) ──────────────────────── */
+    #log-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 14px 14px 14px 6px;
+    }
+
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      box-shadow: var(--ni);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.75;
+    }
+
+    #log::-webkit-scrollbar       { width: 4px; }
+    #log::-webkit-scrollbar-track { background: transparent; }
+    #log::-webkit-scrollbar-thumb { background: var(--nl); border-radius: 2px; }
+
+    .log-entry { white-space: pre-wrap; word-break: break-all; }
+    .log-cmd   { color: #00ffcc; }
+    .log-ok    { color: #00cc66; }
+    .log-err   { color: #ff3300; }
+    .log-info  { color: #3a5a6a; }
+
+    /* ── INPUT BAR (full width, bottom) ─────────────── */
+    #input-bar {
+      height: 66px;
+      flex-shrink: 0;
+      background: var(--nb);
+      box-shadow: 0 -5px 10px var(--nd), 0 2px 5px var(--nl);
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    #prompt-prefix {
+      color: #00ffcc;
+      font-size: 20px;
+      line-height: 1;
+      flex-shrink: 0;
+      user-select: none;
+      text-shadow: 0 0 10px rgba(0,255,204,0.35);
+    }
+
+    #cmd-input {
+      flex: 1;
+      background: var(--nb);
+      border: none;
+      color: #c0e8f0;
+      font-size: 14px;
+      font-family: monospace;
+      outline: none;
+      box-shadow: var(--ni);
+      border-radius: 8px;
+      padding: 8px 14px;
+      height: 40px;
+    }
+
+    #cmd-input::placeholder { color: #3a5a6a; }
+
+    #execute-btn {
+      flex-shrink: 0;
+      background: var(--nb);
+      border: none;
+      color: #00ffcc;
+      font-size: 12px;
+      font-family: monospace;
+      padding: 0 18px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      border-radius: 8px;
+      box-shadow: var(--nr);
+      transition: box-shadow 0.12s, color 0.12s;
+      height: 40px;
+    }
+
+    #execute-btn:hover  { box-shadow: 6px 6px 12px var(--nd), -6px -6px 12px var(--nl); color: #00ffff; }
+    #execute-btn:active { box-shadow: var(--ni); color: #00cc99; }
+  </style>
+</head>
+<body>
+
+  <!-- ── HEADER ───────────────────────────────────── -->
+  <div id="header">
+    <span id="header-title">JARVIS / NASSENGER 8</span>
+    <div id="header-right">
+      <div id="conn-status">
+        <div id="conn-dot" class="online"></div>
+        <span id="conn-text">CONNECTED</span>
+      </div>
+      <a id="nav-link" href="/">neural net →</a>
+    </div>
+  </div>
+
+  <!-- ── MAIN ─────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- Left: status cards -->
+    <div id="status-panel">
+
+      <div class="card" id="card-machine">
+        <div class="card-title">MACHINE</div>
+        <div class="card-value" id="machine-val">—</div>
+      </div>
+
+      <div class="card" id="card-fabric">
+        <div class="card-title">FABRIC ROLL</div>
+        <div class="card-value" id="fabric-val">—</div>
+        <div class="card-sub"  id="fabric-sub">depletion: —</div>
+      </div>
+
+      <div class="card" id="card-speed">
+        <div class="card-title">FABRIC SPEED</div>
+        <div class="card-value" id="speed-val">—</div>
+        <div class="card-sub"  id="speed-sub">omega: —</div>
+      </div>
+
+      <div class="card" id="card-anomaly">
+        <div class="card-title">ANOMALY SCORE</div>
+        <div class="card-value" id="anomaly-val">—</div>
+      </div>
+
+      <div class="card" id="card-fault">
+        <div class="card-title">FAULT STATUS</div>
+        <div class="card-value" id="fault-val">NONE</div>
+      </div>
+
+    </div>
+
+    <!-- Right: command log -->
+    <div id="log-panel">
+      <div id="log"></div>
+    </div>
+
+  </div>
+
+  <!-- ── INPUT BAR ─────────────────────────────────── -->
+  <div id="input-bar">
+    <span id="prompt-prefix">></span>
+    <input id="cmd-input" type="text"
+           placeholder="type command...  (help for list)"
+           autocomplete="off" spellcheck="false">
+    <button id="execute-btn">EXECUTE</button>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ── DOM refs ──────────────────────────────────────────────────
+    const logEl      = document.getElementById('log');
+    const cmdInput   = document.getElementById('cmd-input');
+    const execBtn    = document.getElementById('execute-btn');
+    const connDot    = document.getElementById('conn-dot');
+    const connText   = document.getElementById('conn-text');
+
+    const cardMachine = document.getElementById('card-machine');
+    const machineVal  = document.getElementById('machine-val');
+    const cardFabric  = document.getElementById('card-fabric');
+    const fabricVal   = document.getElementById('fabric-val');
+    const fabricSub   = document.getElementById('fabric-sub');
+    const cardSpeed   = document.getElementById('card-speed');
+    const speedVal    = document.getElementById('speed-val');
+    const speedSub    = document.getElementById('speed-sub');
+    const cardAnomaly = document.getElementById('card-anomaly');
+    const anomalyVal  = document.getElementById('anomaly-val');
+    const cardFault   = document.getElementById('card-fault');
+    const faultVal    = document.getElementById('fault-val');
+
+    // ── Logging ───────────────────────────────────────────────────
+    function ts() {
+      const d = new Date();
+      return [d.getHours(), d.getMinutes(), d.getSeconds()]
+        .map(n => String(n).padStart(2, '0')).join(':');
+    }
+
+    function appendLog(text, cls) {
+      const div = document.createElement('div');
+      div.className = 'log-entry ' + cls;
+      div.textContent = '[' + ts() + '] ' + text;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    const logCmd  = t => appendLog('> ' + t, 'log-cmd');
+    const logOk   = t => appendLog('✓ ' + t, 'log-ok');
+    const logErr  = t => appendLog('✗ ' + t, 'log-err');
+    const logInfo = t => appendLog(t,         'log-info');
+
+    // ── Card helpers ──────────────────────────────────────────────
+    function setCard(cardEl, valEl, text, color) {
+      valEl.textContent = text;
+      valEl.style.color = color;
+      cardEl.style.borderLeftColor = color;
+    }
+
+    function healthColor(level) {
+      if (level === 'FAULT')   return '#ff3300';
+      if (level === 'WARNING') return '#ffaa00';
+      return '#00ffcc';
+    }
+
+    // ── State polling ─────────────────────────────────────────────
+    let connFailing = false;
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const d = await res.json();
+        applyState(d);
+        if (connFailing) {
+          connDot.className = 'online';
+          connText.textContent = 'CONNECTED';
+          connFailing = false;
+        }
+        return d;
+      } catch (_) {
+        if (!connFailing) {
+          connDot.className = 'offline';
+          connText.textContent = 'OFFLINE';
+          connFailing = true;
+        }
+        return null;
+      }
+    }
+
+    function applyState(d) {
+      // Card 1 — MACHINE
+      let mText, mColor;
+      if (d.fault_active) {
+        mText = 'FAULT';   mColor = '#ff3300';
+      } else if (d.paused) {
+        mText = 'PAUSED';  mColor = '#ffaa00';
+      } else {
+        mText = 'RUNNING'; mColor = '#00ffcc';
+      }
+      setCard(cardMachine, machineVal, mText, mColor);
+
+      // Card 2 — FABRIC ROLL
+      const frH = d.health.fabric_roll;
+      setCard(cardFabric, fabricVal, frH, healthColor(frH));
+      fabricSub.textContent = 'depletion: ' + d.key_values.depletion_pct.toFixed(1) + '%';
+
+      // Card 3 — FABRIC SPEED
+      setCard(cardSpeed, speedVal, d.key_values.v_fabric.toFixed(2) + ' m/s', '#00ffcc');
+      speedSub.textContent = 'omega: ' + d.omega_roll.toFixed(1) + ' rad/s';
+
+      // Card 4 — ANOMALY SCORE
+      const sc = d.key_values.anomaly_score;
+      const aColor = sc >= 0.7 ? '#ff3300' : sc >= 0.3 ? '#ffaa00' : '#00cc66';
+      setCard(cardAnomaly, anomalyVal, sc.toFixed(3), aColor);
+
+      // Card 5 — FAULT STATUS
+      if (d.fault_active) {
+        setCard(cardFault, faultVal, d.fault_active, '#ff3300');
+      } else {
+        setCard(cardFault, faultVal, 'NONE', '#00ffcc');
+      }
+    }
+
+    setInterval(fetchState, 500);
+    fetchState();
+
+    // ── Command dispatch ──────────────────────────────────────────
+    async function post(action, value) {
+      const body = { action };
+      if (value !== undefined) body.value = value;
+      const r = await fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return r.json();
+    }
+
+    async function runCommand(raw) {
+      const cmd = raw.trim();
+      if (!cmd) return;
+
+      logCmd(cmd);
+      const parts = cmd.split(/\s+/);
+      const verb  = parts[0].toLowerCase();
+
+      try {
+
+        if (['run', 'resume', 'start'].includes(verb)) {
+          const r = await post('run');
+          r.ok ? logOk(r.message) : logErr(r.error);
+
+        } else if (['pause', 'stop'].includes(verb)) {
+          const r = await post('pause');
+          r.ok ? logOk(r.message) : logErr(r.error);
+
+        } else if (verb === 'reset') {
+          const r = await post('reset');
+          r.ok ? logOk(r.message) : logErr(r.error);
+
+        } else if (verb === 'speed') {
+          const n = parseFloat(parts[1]);
+          if (isNaN(n)) { logErr('usage: speed <1|2|5|10>'); return; }
+          const r = await post('set_speed', n);
+          r.ok ? logOk(r.message) : logErr(r.error);
+
+        } else if (verb === 'omega' ||
+                   (verb === 'set' && parts[1] && parts[1].toLowerCase() === 'omega')) {
+          const raw_n = verb === 'set' ? parts[2] : parts[1];
+          const n = parseFloat(raw_n);
+          if (isNaN(n)) { logErr('usage: omega <value>'); return; }
+          const r = await post('set_omega', n);
+          r.ok ? logOk(r.message) : logErr(r.error);
+
+        } else if (verb === 'fault') {
+          const name = (parts[1] || 'clear').toUpperCase();
+          const r = await post('fault', name);
+          r.ok ? logOk(r.message) : logErr(r.error);
+
+        } else if (['state', 'status'].includes(verb)) {
+          const d = await fetchState();
+          if (d) {
+            logInfo('tick:' + d.tick + '  t:' + d.t.toFixed(1) + 's' +
+                    '  v_fab:' + d.key_values.v_fabric.toFixed(2) + ' m/s');
+            logInfo('deplete:' + d.key_values.depletion_pct.toFixed(1) + '%' +
+                    '  r:' + d.key_values.r_next.toFixed(3) + 'm' +
+                    '  anom:' + d.key_values.anomaly_score.toFixed(3));
+            logInfo('status:' + d.health.overall +
+                    '  fault:' + (d.fault_active || 'none') +
+                    '  paused:' + d.paused);
+          } else {
+            logErr('could not fetch state');
+          }
+
+        } else if (verb === 'help') {
+          [
+            'Commands:',
+            '  run | resume | start          resume simulation',
+            '  pause | stop                  pause simulation',
+            '  reset                         full simulation reset',
+            '  speed <1|2|5|10>              set speed multiplier',
+            '  omega <value>                 set omega_roll (rad/s)',
+            '  set omega <value>             same as above',
+            '  fault OVERSPEED               inject overspeed fault',
+            '  fault UNDERSPEED              inject underspeed fault',
+            '  fault BELOW_CORE              inject below-core fault',
+            '  fault CLEAR                   clear active fault',
+            '  state | status                print current state',
+            '  help                          show this list',
+          ].forEach(logInfo);
+
+        } else {
+          logErr('unknown command — type help for list');
+        }
+
+      } catch (e) {
+        logErr('request failed: ' + e.message);
+      }
+    }
+
+    // ── Input event handlers ──────────────────────────────────────
+    execBtn.addEventListener('click', () => {
+      const v = cmdInput.value;
+      cmdInput.value = '';
+      runCommand(v);
+    });
+
+    cmdInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const v = cmdInput.value;
+        cmdInput.value = '';
+        runCommand(v);
+      }
+    });
+
+    // ── Init ──────────────────────────────────────────────────────
+    logInfo('JARVIS online. Type help for commands.');
+    cmdInput.focus();
+  </script>
+
+</body>
+</html>

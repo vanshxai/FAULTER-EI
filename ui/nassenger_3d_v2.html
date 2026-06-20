@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Nassenger 8 — Digital Twin v2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000810;overflow:hidden;font-family:'Courier New',monospace}
+canvas{position:fixed;inset:0;display:block}
+
+/* scanlines */
+#scan{position:fixed;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,
+    rgba(0,255,204,.010) 2px,rgba(0,255,204,.010) 4px)}
+
+/* ── header ─────────────────────────────────────────────────── */
+#hdr{
+  position:fixed;top:0;left:0;right:0;height:44px;z-index:20;
+  background:rgba(0,8,16,.92);border-bottom:1px solid #00ffcc;
+  display:flex;align-items:center;padding:0 18px;gap:18px
+}
+#hdr .brand h1{font-size:15px;letter-spacing:4px;color:#00ffcc;
+  text-shadow:0 0 10px #00ffcc60;line-height:1}
+#hdr .brand p{font-size:10px;color:#3a6a7a;letter-spacing:2px;margin-top:2px}
+
+#badges{display:flex;gap:6px;flex:1;justify-content:center}
+.bdg{
+  font-size:9px;letter-spacing:1px;padding:3px 8px;border-radius:3px;
+  border:1px solid #00ffcc18;color:#00ffcc40;cursor:pointer;
+  transition:all .25s;pointer-events:auto;user-select:none
+}
+.bdg .dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+  margin-right:4px;background:#00ff88;box-shadow:0 0 5px #00ff88;
+  transition:all .25s;vertical-align:middle}
+.bdg.warn{border-color:#ffaa0040;color:#ffaa00}
+.bdg.warn .dot{background:#ffaa00;box-shadow:0 0 6px #ffaa00}
+.bdg.flt{border-color:#ff330040;color:#ff3300}
+.bdg.flt .dot{background:#ff3300;box-shadow:0 0 8px #ff3300}
+
+#livepill{font-size:10px;color:#00ff8880;white-space:nowrap;
+  display:flex;align-items:center;gap:8px}
+#livepill .ld{width:7px;height:7px;border-radius:50%;background:#00ff88;
+  box-shadow:0 0 7px #00ff88;animation:blink 2s infinite}
+#livepill .sh{font-size:9px;color:#00ffcc20}
+
+/* ── controls legend ────────────────────────────────────────── */
+#leg{
+  position:fixed;bottom:18px;left:18px;z-index:20;
+  background:rgba(0,8,16,.75);border:1px solid #003322;
+  padding:9px 13px;font-size:10px;line-height:2;color:#00ffcc40;
+  pointer-events:none;border-radius:5px
+}
+#leg span{color:#00ffcc;margin-right:6px}
+
+/* ── part info panel ─────────────────────────────────────────── */
+#pnl{
+  position:fixed;bottom:18px;right:18px;z-index:20;
+  width:280px;background:rgba(0,8,16,.94);
+  border:1px solid #00ffcc;border-radius:6px;padding:15px;
+  opacity:0;pointer-events:none;transition:opacity .18s
+}
+#pnl.show{opacity:1;pointer-events:auto}
+#pnl h3{font-size:12px;letter-spacing:2px;color:#00ffcc;margin-bottom:2px}
+#pnl .psub{font-size:9px;color:#00ffcc40;margin-bottom:10px}
+#pnl .row{font-size:11px;line-height:2;color:#88cccc}
+#pnl .row .k{color:#00ffcc50;display:inline-block;width:80px}
+#pnl .pb{
+  display:inline-block;margin-top:8px;font-size:9px;letter-spacing:1px;
+  padding:2px 9px;border-radius:3px;border:1px solid
+}
+#pnl .pb.ok{color:#00ff88;border-color:#00ff8840}
+#pnl .pb.wn{color:#ffaa00;border-color:#ffaa0040}
+#pnl .pb.ft{color:#ff3300;border-color:#ff330040}
+#pnl .xbtn{position:absolute;top:9px;right:12px;font-size:13px;
+  color:#00ffcc40;cursor:pointer;pointer-events:auto}
+#pnl .xbtn:hover{color:#00ffcc}
+
+/* ── tooltip ─────────────────────────────────────────────────── */
+#tip{
+  position:fixed;z-index:30;font-size:10px;color:#00ffcc;letter-spacing:1px;
+  background:rgba(0,8,16,.88);border:1px solid #00ffcc30;border-radius:4px;
+  padding:4px 10px;pointer-events:none;opacity:0;transition:opacity .1s;
+  white-space:nowrap
+}
+#tip.on{opacity:1}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="scan"></div>
+
+<div id="hdr">
+  <div class="brand">
+    <h1>NASSENGER 8</h1>
+    <p>KONICA MINOLTA · DIGITAL TWIN</p>
+  </div>
+  <div id="badges">
+    <div class="bdg" data-id="PRINTER"> <span class="dot"></span>PRINTER</div>
+    <div class="bdg" data-id="UNWINDER"><span class="dot"></span>UNWINDER</div>
+    <div class="bdg" data-id="DRYER">   <span class="dot"></span>DRYER</div>
+    <div class="bdg" data-id="INK_RACK"><span class="dot"></span>INK_RACK</div>
+    <div class="bdg" data-id="CARRIAGE"><span class="dot"></span>CARRIAGE</div>
+  </div>
+  <div id="livepill">
+    <div class="ld" id="ld"></div>
+    <span id="llbl">LIVE</span>
+    <span class="sh">[SPC] rotation</span>
+  </div>
+</div>
+
+<div id="leg">
+  <div><span>LEFT DRAG</span>Orbit</div>
+  <div><span>RIGHT DRAG</span>Pan</div>
+  <div><span>SCROLL</span>Zoom</div>
+  <div><span>CLICK</span>Inspect</div>
+  <div><span>SPACE</span>Rotation</div>
+</div>
+
+<div id="pnl">
+  <span class="xbtn" id="xbtn">✕</span>
+  <h3 id="pn">—</h3>
+  <div class="psub" id="ps">—</div>
+  <div class="row" id="pr"></div>
+  <div class="pb ok" id="pbdg">NOMINAL</div>
+</div>
+
+<div id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════
+//  COORDINATE SYSTEM
+//  X = machine DEPTH front-to-back  (2.010 m)
+//  Y = HEIGHT                        (2.040 m)
+//  Z = LENGTH, fabric travel          +Z=unwinder, −Z=dryer
+// ═══════════════════════════════════════════════════════════════════
+
+// ── renderer ──────────────────────────────────────────────────────
+const canvas   = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000810);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.FogExp2(0x000810, 0.015);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.05, 200);
+camera.position.set(6, 3, 3);
+camera.lookAt(0, 1, 0);
+
+// ── part material registry ────────────────────────────────────────
+const partWires = { PRINTER:[], UNWINDER:[], DRYER:[], INK_RACK:[], CARRIAGE:[] };
+
+// ── helpers ───────────────────────────────────────────────────────
+function mkWf(geom, hex, opacity) {
+  const mat  = new THREE.LineBasicMaterial({
+    color:hex, transparent:opacity!=null&&opacity<1, opacity:opacity??1
+  });
+  const mesh = new THREE.LineSegments(new THREE.EdgesGeometry(geom), mat);
+  mesh.userData.baseColor   = hex;
+  mesh.userData.baseOpacity = opacity ?? 1;
+  return mesh;
+}
+
+function addWf(geom, hex, px, py, pz, partId, rotX, rotZ, opacity) {
+  const m = mkWf(geom, hex, opacity);
+  m.position.set(px,py,pz);
+  if (rotX) m.rotation.x = rotX;
+  if (rotZ) m.rotation.z = rotZ;
+  scene.add(m);
+  if (partId && partWires[partId]) partWires[partId].push(m);
+  return m;
+}
+
+function addLine(pts, hex, opacity) {
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  const m = new THREE.Line(g, new THREE.LineBasicMaterial({
+    color:hex, transparent:opacity<1, opacity
+  }));
+  scene.add(m);
+  return m;
+}
+
+function B(w,h,d){ return new THREE.BoxGeometry(w,h,d); }
+function C(r,h,s){ return new THREE.CylinderGeometry(r,r,h,s??16); }
+function S(r,w,h){ return new THREE.SphereGeometry(r,w??8,h??8); }
+
+// ═══════════════════════════════════════════════════════════════════
+//  FLOOR GRID
+// ═══════════════════════════════════════════════════════════════════
+scene.add(new THREE.GridHelper(16,32,0x332200,0x221500));
+
+// ═══════════════════════════════════════════════════════════════════
+//  PART 1 — PRINT UNIT
+// ═══════════════════════════════════════════════════════════════════
+// Main cabinet shell (5.080 × 2.040 × 2.010 m)
+addWf(B(5.080,2.040,2.010), 0x003322, 0,1.020,0, 'PRINTER', 0,0, .65);
+// Blue control panel (−X end, operator side)
+addWf(B(0.350,2.040,2.010), 0x0044cc, -2.540,1.020,0, 'PRINTER');
+// Blue top trim bar
+addWf(B(5.080,0.060,2.010), 0x00aaff, 0,2.070,0, 'PRINTER');
+// 4 viewing windows on top face (spread along X length)
+[-1.500,-0.600,0.300,1.200].forEach(x =>
+  addWf(B(0.650,0.010,1.600), 0x004455, x,2.045,0, 'PRINTER')
+);
+// Touch panel display (on −X end panel)
+addWf(B(0.010,0.250,0.350), 0x00ccff, -2.530,1.500,-0.400, 'PRINTER');
+// Emergency stop (on −X end panel)
+addWf(S(0.040,8,8), 0xff0000, -2.530,1.700,-0.200, 'PRINTER');
+
+// Warning labels ×2 (on front face z=−1.010)
+[1.300,0.800].forEach(y =>
+  addWf(B(0.080,0.080,0.010), 0xffaa00, 1.500,y,-1.010, 'PRINTER')
+);
+// 6 leveling feet (spread along X, front and back)
+[-2.000,0,2.000].forEach(x => [-0.850,0.850].forEach(z =>
+  addWf(C(0.050,0.080,8), 0x004444, x,0.040,z, 'PRINTER')
+));
+// Fabric entry slot (back face z=+1.010, fabric enters from unwinder)
+addWf(B(1.850,0.120,0.010), 0x001111, 0,0.900,1.010, 'PRINTER');
+
+// ── Carriage guide rails (static) ────────────────────────────────
+[-0.850,0.850].forEach(z =>
+  addWf(B(5.080,0.020,0.020), 0x00ffcc, 0,1.750,z, 'CARRIAGE')
+);
+// Capping/maintenance station (at far +X end)
+addWf(B(0.100,0.150,1.800), 0xffaa00, 2.540,1.750,0, 'CARRIAGE');
+
+// ── Print carriage (animated) ─────────────────────────────────────
+const carriageMesh = mkWf(B(0.100,0.180,1.800), 0xff6600);
+carriageMesh.position.set(0,1.750,0);
+carriageMesh.userData.partId = 'CARRIAGE';
+scene.add(carriageMesh);
+partWires['CARRIAGE'].push(carriageMesh);
+
+// 32 printhead blocks (4 rows × 8, KM1024) — follow carriage in X
+const headMeshes = [];
+[0,1,2,3].forEach(row => {
+  const yOff = -0.040 + row*0.022;
+  for (let col=0; col<8; col++) {
+    const xo = -0.311 + col*0.089;
+    const m = mkWf(B(0.089,0.018,0.131), 0xff4400);
+    m.position.set(xo, 1.720+yOff, 0);
+    m.userData.partId = 'CARRIAGE';
+    m.userData.xo = xo;                 // column offset, applied around carriage x
+    scene.add(m);
+    partWires['CARRIAGE'].push(m);
+    headMeshes.push(m);
+  }
+});
+
+// ── Carriage bounding box ─────────────────────────────────────────
+const carriageBound = new THREE.Mesh(
+  B(0.300,0.450,1.900),
+  new THREE.MeshBasicMaterial({visible:false,side:THREE.DoubleSide})
+);
+carriageBound.userData.partId = 'CARRIAGE';
+carriageBound.position.set(0,1.700,0);
+scene.add(carriageBound);
+
+// ═══════════════════════════════════════════════════════════════════
+//  PART 2 — UNWINDER
+// ═══════════════════════════════════════════════════════════════════
+// Frame: large gap behind printer. center z=3.305
+addWf(B(2.544,1.150,0.800), 0x001a1a, 0,0.575,3.305, 'UNWINDER');
+
+// 3 feed rollers (axis along X)
+const feedRollers = [];
+[[0,0.900,3.100],[0,0.550,3.300],[0,0.200,3.100]].forEach(([x,y,z]) => {
+  const m = mkWf(C(0.100,2.544,24), 0x1a1a1a);
+  m.position.set(x,y,z);
+  m.rotation.z = Math.PI/2;
+  m.userData.partId = 'UNWINDER';
+  scene.add(m);
+  partWires['UNWINDER'].push(m);
+  feedRollers.push(m);
+});
+
+// Input fabric roll (dynamic geometry, rebuilt when r changes)
+let rInput    = 0.300;
+let lastRIn   = 0.300;
+const inputRollMesh = mkWf(C(0.300,2.544,32), 0x00ccff);
+inputRollMesh.position.set(0,0.575,3.900);
+inputRollMesh.rotation.z = Math.PI/2;
+inputRollMesh.userData.partId = 'UNWINDER';
+scene.add(inputRollMesh);
+partWires['UNWINDER'].push(inputRollMesh);
+
+// ═══════════════════════════════════════════════════════════════════
+//  PART 3 — DRYER & WINDER
+// ═══════════════════════════════════════════════════════════════════
+// Cabinet: large gap in front of printer. center z=−3.700
+addWf(B(2.534,1.480,1.668), 0x002200, 0,0.740,-3.700, 'DRYER', 0,0, .7);
+// Blue trim top
+addWf(B(2.534,0.050,1.668), 0x0044cc, 0,1.515,-3.700, 'DRYER');
+
+// X-brace on front face (z = −3.700 − 0.834 = −4.534)
+{
+  const fz=-4.534, x0=-1.267, x1=1.267, y0=0, y1=1.480;
+  addLine([new THREE.Vector3(x0,y0,fz),new THREE.Vector3(x1,y1,fz)], 0x003333, .7);
+  addLine([new THREE.Vector3(x1,y0,fz),new THREE.Vector3(x0,y1,fz)], 0x003333, .7);
+}
+
+// Heated drum (pulsing, inside dryer)
+const heaterMesh = mkWf(C(0.250,2.534,24), 0xff2200, .5);
+heaterMesh.position.set(0,0.900,-3.700);
+heaterMesh.rotation.z = Math.PI/2;
+heaterMesh.userData.partId = 'DRYER';
+scene.add(heaterMesh);
+partWires['DRYER'].push(heaterMesh);
+
+// Output winder roll (dynamic geometry, starts at r=0.150)
+let rOutput    = 0.150;
+let lastROut   = 0.150;
+const outputRollMesh = mkWf(C(0.150,2.534,32), 0x00ccff);
+outputRollMesh.position.set(0,0.250,-4.361);
+outputRollMesh.rotation.z = Math.PI/2;
+outputRollMesh.userData.partId = 'DRYER';
+scene.add(outputRollMesh);
+partWires['DRYER'].push(outputRollMesh);
+
+// Temperature display panels
+[[1.268,0.900,-3.700],[1.268,0.700,-3.700]].forEach(([x,y,z]) =>
+  addWf(B(0.010,0.080,0.120), 0x00ff44, x,y,z, 'DRYER')
+);
+
+// ═══════════════════════════════════════════════════════════════════
+//  PART 4 — INK RACK
+// ═══════════════════════════════════════════════════════════════════
+// Rack cabinet: 0.960 × 1.965 × 0.762, position (1.600, 0.983, 0.500)
+addWf(B(0.960,1.965,0.762), 0x004466, 1.600,0.983,0.500, 'INK_RACK');
+
+const INK_CLR = [0x00ffff,0xff00ff,0xffff00,0x333333,0xff8844,0x8888ff,0xff88ff,0x888888];
+const INK_NM  = ['C','M','Y','K','Or','Bl','Pk','Gy'];
+const Z_OFF   = [-0.250,-0.083,0.083,0.250];
+const X_OFF   = [-0.200,0.200];
+
+const bottlePos = [];   // absolute world positions of bottle tops
+
+INK_CLR.forEach((clr, i) => {
+  const col    = i % 4;
+  const row    = Math.floor(i / 4);
+  const bx     = 1.600 + X_OFF[row];
+  const by     = 0.500;
+  const bz     = 0.500 + Z_OFF[col];
+  bottlePos.push(new THREE.Vector3(bx, by, bz));
+
+  // Bottle
+  addWf(C(0.055,0.300,8), clr, bx,by,bz, 'INK_RACK');
+
+  // Ink level bar (random 30–100%)
+  const lvl  = 0.3 + Math.random() * 0.7;
+  const lclr = lvl>0.5 ? 0x00cc44 : lvl>0.2 ? 0xffaa00 : 0xff3300;
+  addWf(B(0.050,lvl*0.280,0.010), lclr, bx, by+lvl*0.140-0.070, bz-0.068, 'INK_RACK');
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  INK TUBES  (TubeGeometry, rebuilt when carriage moves > 0.05 m)
+// ═══════════════════════════════════════════════════════════════════
+const inkTubes       = [];
+let   lastTubeZ      = Infinity;
+
+INK_CLR.forEach((clr, i) => {
+  const bp = bottlePos[i];
+  // 3 CatmullRom control points: bottle → gentle arc → carriage
+  const pts = [
+    new THREE.Vector3(bp.x, bp.y+0.16, bp.z),   // bottle top
+    new THREE.Vector3(0.8,  2.200,      0),        // gentle arc apex (updated mid z)
+    new THREE.Vector3(0,    1.780,      0),        // carriage (updated)
+  ];
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const tGeom = new THREE.TubeGeometry(curve, 10, 0.004, 6, false);
+  const tMat  = new THREE.MeshBasicMaterial({
+    color:clr, transparent:true, opacity:0.45, side:THREE.DoubleSide
+  });
+  const tMesh = new THREE.Mesh(tGeom, tMat);
+  scene.add(tMesh);
+
+  // Pulse sphere
+  const pMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.016,6,6),
+    new THREE.MeshBasicMaterial({color:clr, transparent:true, opacity:0})
+  );
+  scene.add(pMesh);
+
+  inkTubes.push({ curve, mesh:tMesh, pulse:pMesh, phase:i/INK_CLR.length });
+});
+
+function rebuildInkTubes(cx) {
+  inkTubes.forEach(t => {
+    t.curve.points[1].set(0.8 + cx * 0.3, 2.200, 0);  // arc midpoint tracks carriage X
+    t.curve.points[2].set(cx, 1.780, 0);                 // endpoint at carriage X
+    const old = t.mesh.geometry;
+    t.mesh.geometry = new THREE.TubeGeometry(t.curve, 10, 0.004, 6, false);
+    old.dispose();
+  });
+  lastTubeZ = cx;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FABRIC PATH — CatmullRomCurve3 → TubeGeometry (static)
+// ═══════════════════════════════════════════════════════════════════
+{
+  const pts = [
+    new THREE.Vector3(0, 0.575, 4.800),   // input roll
+    new THREE.Vector3(0, 0.900, 3.800),   // top roller
+    new THREE.Vector3(0, 0.550, 4.000),   // mid roller
+    new THREE.Vector3(0, 0.200, 3.800),   // bottom roller
+    new THREE.Vector3(0, 0.900, 2.800),   // rising entry
+    new THREE.Vector3(0, 0.900, 1.500),   // printer entry gap
+    new THREE.Vector3(0, 0.900, 0),       // print zone
+    new THREE.Vector3(0, 0.900,-1.500),   // printer exit gap
+    new THREE.Vector3(0, 0.700,-2.800),   // dryer entry
+    new THREE.Vector3(0, 0.500,-3.500),   // over drum
+    new THREE.Vector3(0, 0.200,-4.500),   // output roll
+  ];
+  const curve   = new THREE.CatmullRomCurve3(pts);
+  const tGeom   = new THREE.TubeGeometry(curve, 80, 0.015, 8, false);
+  const tMat    = new THREE.MeshBasicMaterial({
+    color:0xffffff, transparent:true, opacity:0.50, side:THREE.DoubleSide
+  });
+  scene.add(new THREE.Mesh(tGeom, tMat));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DETAILED INTERNAL COMPONENTS  (52 added parts — ADDITIVE ONLY)
+//  Coord: X=length(5.080)  Y=height(2.040)  Z=depth(2.010)
+//  NOTE: cross-fabric rolls/shafts/bars use rotation.z=PI/2 so their
+//  axis lies along X, parallel to the existing corrected rollers
+//  (the spec's rotation.x would point them along Z = the diagonal bug).
+// ═══════════════════════════════════════════════════════════════════
+const HP = Math.PI/2;
+
+// ── GROUP 1 — UNWINDER DETAIL (moved in, attached to printer back) ──
+// 1  Cradle arms ×2 (hold fabric roll)
+[-1.100,1.100].forEach(x => addWf(B(0.060,0.700,0.060), 0x00ffcc, x,0.350,3.900, 'UNWINDER'));
+// 2  Core shaft (through fabric roll) — axis along X
+addWf(C(0.038,2.600,12), 0x00ffcc, 0,0.575,3.700, 'UNWINDER', 0, HP);
+// 11 Feed encoder
+addWf(C(0.025,0.025,8), 0x00aaff, -1.520,0.575,3.200, 'UNWINDER');
+
+// Unwind motor assembly — M1 big motor (replaced with proper size)
+const unwindMotor = addWf(C(0.090,0.220,24), 0x00ffcc, -1.350,0.400,3.100, 'UNWINDER', 0, HP);
+// M1 end cap front
+addWf(C(0.092,0.015,24), 0x00aaff, -1.350,0.400,2.990, 'UNWINDER', 0, HP);
+// M1 end cap rear
+addWf(C(0.092,0.015,24), 0x00aaff, -1.350,0.400,3.210, 'UNWINDER', 0, HP);
+// M1 shaft (protruding both ends, axis along X)
+addWf(C(0.015,0.320,8), 0x888888, -1.350,0.400,3.100, 'UNWINDER', 0, HP);
+// M1 mounting feet ×2
+addWf(B(0.060,0.040,0.060), 0x004444, -1.350,0.240,3.040, 'UNWINDER');
+addWf(B(0.060,0.040,0.060), 0x004444, -1.350,0.240,3.160, 'UNWINDER');
+// Encoder on motor
+addWf(C(0.030,0.030,8), 0x00aaff, -1.350,0.400,2.960, 'UNWINDER', 0, HP);
+// Gear transmission box
+addWf(B(0.120,0.100,0.100), 0xffaa00, -1.350,0.400,3.220, 'UNWINDER');
+
+// Dancer arm system (pivoting web-tension arm — main moving part)
+// pivot shaft — axis along X
+addWf(C(0.015,2.544,8), 0x00ffcc, 0,1.050,2.700, 'UNWINDER', 0, HP);
+// arms ×2 (swing fwd/back about X)
+const dancerArmL = addWf(B(0.020,0.400,0.020), 0x0088ff, -1.200,0.850,2.800, 'UNWINDER');
+const dancerArmR = addWf(B(0.020,0.400,0.020), 0x0088ff,  1.200,0.850,2.800, 'UNWINDER');
+// dancer roller on arm — axis along X, moves in Z with arms
+const dancerRoller = addWf(C(0.035,2.400,16), 0x0088ff, 0,0.650,2.800, 'UNWINDER', 0, HP);
+// tension spring (stretches in Y)
+const dancerSpring = addWf(C(0.010,0.200,6), 0xffaa00, 1.200,0.950,2.750, 'UNWINDER');
+// pneumatic cylinder (near dancer)
+addWf(C(0.020,0.200,8), 0x00ccff, 1.200,0.750,2.750, 'UNWINDER');
+// load cell (tension sensor)
+addWf(B(0.040,0.040,0.060), 0xffaa00, 1.050,0.950,2.750, 'UNWINDER');
+
+// ── GROUP 2 — FABRIC TRANSPORT INSIDE PRINTER ──────────────────────
+// 12 Drive roller (animated spin) — axis along X
+const driveRoller = addWf(C(0.060,5.080,24), 0x1a1a1a, 0,0.800,-0.800, 'PRINTER', 0, HP);
+// 13 Pinch roller — axis along X
+addWf(C(0.030,5.080,16), 0x222222, 0,0.900,-0.800, 'PRINTER', 0, HP);
+// 14 Spreader bar — axis along X
+addWf(C(0.020,5.080,8), 0x00ffcc, 0,0.850,-0.400, 'PRINTER', 0, HP);
+// 15 Anti-curl bar — axis along X
+addWf(C(0.018,5.080,8), 0x00ffcc, 0,0.870,0.400, 'PRINTER', 0, HP);
+// 16 Edge guide roller left
+addWf(C(0.025,0.060,8), 0xffaa00, -2.400,0.850,0, 'PRINTER');
+// 17 Edge guide roller right
+addWf(C(0.025,0.060,8), 0xffaa00, 2.400,0.850,0, 'PRINTER');
+// 18 Flatness sensor
+addWf(B(0.060,0.040,0.040), 0x00aaff, 2.200,0.920,0, 'PRINTER');
+// 19 Belt conveyor surface
+addWf(B(5.000,0.010,1.800), 0x003322, 0,0.760,0, 'PRINTER');
+// 20 Tension sensor inside
+addWf(B(0.040,0.040,0.060), 0xffaa00, 2.300,0.850,-0.600, 'PRINTER');
+
+// ── GROUP 3 — CARRIAGE DETAIL ──────────────────────────────────────
+// 21 M2 Carriage scan motor — big DC servo, axis along X
+const carriageMotor = addWf(C(0.070,0.180,24), 0x00ffcc, -2.400,1.750,0.500, 'CARRIAGE', 0, HP);
+addWf(C(0.072,0.012,24), 0x00aaff, -2.310,1.750,0.500, 'CARRIAGE', 0, HP); // end cap front
+addWf(C(0.072,0.012,24), 0x00aaff, -2.490,1.750,0.500, 'CARRIAGE', 0, HP); // end cap rear
+addWf(C(0.012,0.260,8), 0x888888, -2.300,1.750,0.500, 'CARRIAGE', 0, HP);  // shaft
+// 22 Drive pulley
+addWf(C(0.030,0.040,12), 0xffaa00, -2.300,1.750,0.400, 'CARRIAGE', 0, HP);
+// 23 Idler pulley (far end)
+addWf(C(0.030,0.040,12), 0xffaa00, 2.300,1.750,0.400, 'CARRIAGE', 0, HP);
+// 24 Timing belt (static)
+addWf(B(4.600,0.008,0.020), 0x333333, 0,1.750,0.400, 'CARRIAGE');
+// 25 Linear encoder strip
+addWf(B(4.800,0.005,0.008), 0x00aaff, 0,1.820,0.200, 'CARRIAGE');
+// 26 Cable chain / drag chain (animated x + scale) — base width 4.600
+const cableChain = mkWf(B(4.600,0.060,0.035), 0x1a1a1a);
+cableChain.position.set(0,1.650,-0.450);
+scene.add(cableChain);
+// 27 M6 Head-height stepper — bigger, follows carriage X
+const headHeightMotor = addWf(C(0.035,0.080,16), 0x00ffcc, 0,2.000,0.150, 'CARRIAGE');
+// 28 Lead screw (follows carriage X)
+const leadScrew = addWf(C(0.008,0.200,8), 0x00ffcc, 0,1.850,0.100, 'CARRIAGE');
+// 29 Maintenance capping station (−X end)
+addWf(B(0.120,0.150,0.200), 0xffaa00, -2.400,1.750,0, 'CARRIAGE');
+// 30 Wiper blade
+addWf(B(0.008,0.060,0.180), 0xffaa00, -2.200,1.750,0, 'CARRIAGE');
+// 31 Optical nozzle camera
+addWf(B(0.060,0.050,0.060), 0x00aaff, 2.400,1.750,-0.200, 'CARRIAGE');
+// 32 LED illumination bar
+addWf(B(0.008,0.020,0.180), 0xffffff, 2.350,1.700,-0.200, 'CARRIAGE');
+
+// ── GROUP 4 — INK SUPPLY DETAIL ────────────────────────────────────
+const PUMP_X = [1.560,1.620], PUMP_Z = [0.200,0.350,0.500,0.650];
+// 33 Ink pumps ×8  +  34 Ink filters ×8
+PUMP_X.forEach(px => PUMP_Z.forEach(pz => {
+  addWf(C(0.025,0.080,8),    0x00ffcc, px,1.400,pz, 'INK_RACK');   // 33 pump
+  addWf(B(0.020,0.040,0.020),0xffaa00, px,1.300,pz, 'INK_RACK');   // 34 filter
+}));
+// 35 Sub-tanks ×4  +  36 Pressure dampers ×4 (just below tanks)
+[1.500,1.700].forEach(px => [0.250,0.450].forEach(pz => {
+  addWf(B(0.060,0.080,0.060), 0x003344, px,1.800,pz, 'INK_RACK');  // 35 sub-tank
+  addWf(C(0.020,0.060,8),     0x00ccff, px,1.720,pz, 'INK_RACK');  // 36 damper
+}));
+// 37 Main ink supply tubes ×8 (rack top → mid → cable-chain entry)
+INK_CLR.forEach((clr,i) => {
+  const bp = bottlePos[i];
+  addLine([
+    new THREE.Vector3(bp.x, bp.y+0.16, bp.z),
+    new THREE.Vector3(0.800, 2.100, 0.300),
+    new THREE.Vector3(-2.300, 1.650, -0.400),
+  ], clr, 0.5);
+});
+
+// ── GROUP 5 — DRYER DETAIL (center z=−3.700) ─────────────────────────
+// 38 HEATING COILS — 4 rows × 8 quartz IR tubes each (replaces boxes)
+const heatingElements = [[],[],[],[]];
+const HC_Y = [0.320, 0.520, 0.720, 0.920];
+const HC_CLR = [0xff2200, 0xff3300, 0xff4400, 0xff5500];
+HC_Y.forEach((y, row) => {
+  for (let i=0; i<8; i++) {
+    const x = -0.875 + i*0.250;
+    const m = addWf(C(0.008,1.900,6), HC_CLR[row], x,y,-3.700, 'DRYER', 0, HP, 0.7);
+    m.material.transparent = true;
+    heatingElements[row].push(m);
+    // end connectors
+    addWf(B(0.020,0.020,0.020), 0x888888, -0.960,y,-3.700, 'DRYER');
+    addWf(B(0.020,0.020,0.020), 0x888888,  0.960,y,-3.700, 'DRYER');
+  }
+});
+// heat shimmer (very faint, animated)
+const heatShimmer = addWf(B(1.900,0.600,0.010), 0xff2200, 0,0.620,-3.650, null, 0,0, 0.04);
+heatShimmer.material.transparent = true;
+
+// 39 Blower housings — M5a/M5b big vertical fan motors
+const dryerFanMotors = [];
+const dryerFanBlades = [];
+[-0.700,0.700].forEach(fx => {
+  // Motor body (vertical)
+  const fm = addWf(C(0.065,0.150,24), 0x00ffcc, fx,1.500,-3.700, 'DRYER');
+  fm.material.transparent = true;
+  dryerFanMotors.push(fm);
+  // Fan hub
+  addWf(C(0.030,0.040,12), 0x888888, fx,1.580,-3.700, 'DRYER');
+  // Fan blades (2-piece cross, rotate on Y)
+  const b1 = mkWf(B(0.180,0.015,0.040), 0x00aaff);
+  b1.position.set(fx,1.600,-3.700);
+  scene.add(b1); dryerFanBlades.push(b1);
+  const b2 = mkWf(B(0.040,0.015,0.180), 0x00aaff);
+  b2.position.set(fx,1.600,-3.700);
+  scene.add(b2); dryerFanBlades.push(b2);
+});
+// Old-style blower still referenced → alias (fanBlades kept for compat)
+const fanBlades = dryerFanBlades;
+
+// 41 Air knife nozzle
+addWf(B(2.300,0.025,0.050), 0x00ccff, 0,1.400,-2.911, 'DRYER');
+
+// 42 Winder servo motor — M4 big motor, axis along X
+const winderMotor = addWf(C(0.080,0.200,24), 0x00ffcc, -1.200,0.300,-4.200, 'DRYER', 0, HP);
+// M4 end caps
+addWf(C(0.082,0.012,24), 0x00aaff, -1.200,0.300,-4.090, 'DRYER', 0, HP);
+addWf(C(0.082,0.012,24), 0x00aaff, -1.200,0.300,-4.310, 'DRYER', 0, HP);
+// M4 shaft
+addWf(C(0.012,0.280,8), 0x888888, -1.200,0.300,-4.200, 'DRYER', 0, HP);
+
+// 43 Winder dancer roller — axis along X
+addWf(C(0.030,2.400,12), 0x0088ff, 0,0.600,-3.361, 'DRYER', 0, HP);
+// 44 Winder tension sensor
+addWf(B(0.040,0.040,0.060), 0xffaa00, 1.100,0.600,-3.361, 'DRYER');
+// 45 Temperature sensors ×2
+[0.800,-0.800].forEach(x => addWf(C(0.010,0.060,6), 0xff4400, x,1.400,-3.461, 'DRYER'));
+
+// ── GROUP 6 — POWER & CONTROL ──────────────────────────────────────
+// 46 Main power distribution unit
+addWf(B(0.300,0.400,0.200), 0x002233, -2.300,1.500,-0.700, 'PRINTER');
+// 47 Motor driver boards ×3
+[-0.700,-0.500,-0.300].forEach(z => addWf(B(0.100,0.150,0.020), 0x003322, -2.300,1.200,z, 'PRINTER'));
+// 48 PID controller board
+addWf(B(0.150,0.100,0.020), 0x003344, -2.300,1.050,-0.700, 'PRINTER');
+// 49 Ventilation fans ×2 (face −X panel, spin on own axis)
+const ventFans = [];
+[-2.200,-2.000].forEach(z =>
+  ventFans.push(addWf(C(0.040,0.020,12), 0x003322, -2.510,1.800,z, 'PRINTER', 0, HP))
+);
+
+// ── GROUP 7 — ENVIRONMENTAL SENSORS ────────────────────────────────
+// 50 Temperature sensor
+addWf(B(0.020,0.050,0.020), 0xff4400, 1.900,1.900,0, 'PRINTER');
+// 51 Humidity sensor
+addWf(B(0.020,0.050,0.020), 0x00aaff, 1.900,1.900,0.100, 'PRINTER');
+// 52 Status light tower [red, amber, green] — pulses on global anomaly
+const statusLights = [];
+[[2.100,0xff0000],[2.200,0xffaa00],[2.300,0x00ff44]].forEach(([y,clr]) =>
+  statusLights.push(addWf(S(0.030,8,8), clr, -2.510,y,-2.400, null, 0,0, 0.5))
+);
+
+// ── GROUP 8 — ADDED MECHANICS (drag chain, belt, vacuum, motors) ────
+// Drag-chain end brackets: one static anchor + one that follows carriage
+addWf(B(0.040,0.080,0.040), 0x333333, -2.300,1.650,-0.450, 'CARRIAGE');
+const dragBracket = addWf(B(0.040,0.080,0.040), 0x333333, 0,1.650,-0.450, 'CARRIAGE');
+// Timing belt — upper run (motor→carriage, animated) + lower return (static)
+const beltUpper = addLine([
+  new THREE.Vector3(-2.300,1.780,0.400), new THREE.Vector3(0,1.780,0.400)
+], 0x333333, 1);
+addLine([
+  new THREE.Vector3(-2.300,1.720,0.400), new THREE.Vector3(2.300,1.720,0.400)
+], 0x222222, 1);
+// Carriage motor shaft (B)
+addWf(C(0.010,0.060,8), 0x00ffcc, -2.320,1.750,0.400, 'CARRIAGE', 0, HP);
+// M3 Fabric feed motor — big AC servo, axis along X
+const feedMotor = addWf(C(0.080,0.200,24), 0x00ffcc, -2.400,0.800,-0.600, 'PRINTER', 0, HP);
+addWf(C(0.082,0.012,24), 0x00aaff, -2.310,0.800,-0.600, 'PRINTER', 0, HP); // end cap front
+addWf(C(0.082,0.012,24), 0x00aaff, -2.490,0.800,-0.600, 'PRINTER', 0, HP); // end cap rear
+addWf(C(0.012,0.280,8), 0x888888, -2.300,0.800,-0.600, 'PRINTER', 0, HP);  // shaft
+addWf(B(0.080,0.080,0.080), 0xffaa00, -2.200,0.800,-0.600, 'PRINTER');      // gearbox
+// Vacuum pump (capping) + suction tube + waste ink tank
+addWf(C(0.030,0.080,12), 0x003344, -2.400,1.580,0.100, 'CARRIAGE');
+addLine([new THREE.Vector3(-2.400,1.580,0.100), new THREE.Vector3(-2.400,1.750,0)], 0x00ccff, 1);
+addWf(B(0.120,0.080,0.100), 0x1a0000, -2.400,1.480,0.100, 'CARRIAGE');
+
+// ── GROUP 9 — PNEUMATIC SYSTEM ─────────────────────────────────────
+// Air compressor inlet fitting
+addWf(C(0.025,0.080,8), 0x00ccff, -2.510,0.600,-2.000, 'PRINTER', 0, HP);
+// Main pneumatic manifold
+addWf(B(0.040,0.300,0.040), 0x003344, -2.450,0.700,-1.800, 'PRINTER');
+// Air pressure gauges ×3
+[-0.620,-0.700,-0.780].forEach(y2 => {
+  // y2 is offset; convert to absolute y from gauge positions
+});
+[0.620,0.700,0.780].forEach(y =>
+  addWf(C(0.020,0.005,12), 0x888888, -2.460,y,-1.800, 'PRINTER', 0, HP)
+);
+// Solenoid valves ×4
+[-1.820,-1.780,-1.760,-1.740].forEach(z =>
+  addWf(B(0.035,0.035,0.060), 0x003366, -2.450,0.550,z, 'PRINTER')
+);
+// Air line 1 → dancer cylinder
+addLine([
+  new THREE.Vector3(-2.450,0.700,-1.800),
+  new THREE.Vector3(-2.450,0.700, 1.000),
+  new THREE.Vector3( 1.100,0.650, 2.750),
+], 0x00ccff, 0.6);
+// Air line 2 → capping station
+addLine([
+  new THREE.Vector3(-2.450,0.620,-1.800),
+  new THREE.Vector3(-2.400,0.620,-0.100),
+  new THREE.Vector3(-2.400,1.580, 0.100),
+], 0x00ccff, 0.6);
+// Air line 3 → edge guide left
+addLine([
+  new THREE.Vector3(-2.450,0.780,-1.800),
+  new THREE.Vector3(-2.450,0.820, 0.700),
+], 0x00ccff, 0.6);
+// Air line 4 → edge guide right
+addLine([
+  new THREE.Vector3(-2.450,0.780,-1.800),
+  new THREE.Vector3( 2.450,0.820, 0.700),
+], 0x00ccff, 0.6);
+// Capping station pneumatic seal (animated scale.y)
+const cappingSeal = addWf(C(0.015,0.060,8), 0x00ccff, -2.400,1.680,0, 'CARRIAGE');
+cappingSeal.material.transparent = true;
+// Edge guide pneumatic actuators ×2
+addWf(C(0.018,0.120,8), 0x00ccff, -2.450,0.820,0.700, 'PRINTER', 0, HP);
+addWf(C(0.018,0.120,8), 0x00ccff,  2.450,0.820,0.700, 'PRINTER', 0, HP);
+
+// ── GROUP 9b — SMALL MOTORS M7–M10 ────────────────────────────────
+// M7 Wiper blade motor
+const wiperMotor = addWf(C(0.022,0.055,12), 0x00ffcc, -2.400,1.820,-0.050, 'CARRIAGE');
+// M8 Ink pump motors ×8 (behind ink rack)
+const inkPumpMotors = [];
+const M8_Z = [0.200,0.285,0.370,0.455,0.540,0.625,0.710,0.795];
+INK_CLR.forEach((clr,i) => {
+  const m = addWf(C(0.020,0.060,10), clr, 1.900,1.200,M8_Z[i], 'INK_RACK', 0, HP);
+  m.material.transparent = true;
+  inkPumpMotors.push(m);
+});
+// M9 Vacuum pump motor
+const vacuumMotor = addWf(C(0.028,0.070,12), 0x003344, -2.400,1.520,0.150, 'CARRIAGE');
+// M10a/b Edge guide motors ×2
+const edgeGuideMotors = [];
+[[-2.460,0.820,0.700],[2.460,0.820,0.700]].forEach(([x,y,z]) =>
+  edgeGuideMotors.push(addWf(C(0.022,0.055,10), 0x00ffcc, x,y,z, 'PRINTER', 0, HP))
+);
+
+// ═══════════════════════════════════════════════════════════════════
+//  INVISIBLE BOUNDING BOXES
+// ═══════════════════════════════════════════════════════════════════
+const BOUND_DEFS = {
+  PRINTER:  [[5.080,2.040,2.010],[0,1.020,0]],
+  UNWINDER: [[2.800,1.600,2.000],[0,0.700,3.400]],
+  DRYER:    [[2.800,1.700,2.400],[0,0.800,-3.800]],
+  INK_RACK: [[1.100,2.000,0.900],[1.600,0.983,0.500]],
+};
+
+const boundMeshes = [carriageBound];
+Object.entries(BOUND_DEFS).forEach(([id,[size,pos]]) => {
+  const m = new THREE.Mesh(
+    B(...size),
+    new THREE.MeshBasicMaterial({visible:false,side:THREE.DoubleSide})
+  );
+  m.position.set(...pos);
+  m.userData.partId = id;
+  scene.add(m);
+  boundMeshes.push(m);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  PART INFO DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════
+const PINFO = {
+  PRINTER:{
+    name:'PRINT UNIT', sub:'MAIN CABINET',
+    rows:[
+      ['Dims','5080×2010×2040 mm'],
+      ['Weight','~3,300 kg'],
+      ['Power','AC 200-240V 30A'],
+      ['Printheads','32 (4-line)'],
+      ['Nozzles','32,768 total'],
+      ['Max speed','480 m²/h'],
+    ]
+  },
+  UNWINDER:{
+    name:'UNWINDER', sub:'FABRIC INPUT UNIT',
+    rows:[
+      ['Dims','2544×800×1150 mm'],
+      ['Weight','~600 kg'],
+      ['r_current','live:r'],
+      ['Depletion','live:dep'],
+      ['v_fabric','live:v'],
+    ]
+  },
+  DRYER:{
+    name:'DRIER & WINDER', sub:'FABRIC OUTPUT UNIT',
+    rows:[
+      ['Dims','2534×1668×1480 mm'],
+      ['Weight','~270 kg'],
+      ['Power','AC 380V 3-phase 50A'],
+      ['Drum temp','105°C nominal'],
+    ]
+  },
+  INK_RACK:{
+    name:'INK RACK', sub:'CONSUMABLES UNIT',
+    rows:[
+      ['Dims','960×1965×762 mm'],
+      ['Weight','~170 kg'],
+      ['Channels','8'],
+      ['Ink types','reactive / disperse / acid'],
+    ]
+  },
+  CARRIAGE:{
+    name:'PRINT CARRIAGE', sub:'SCAN MECHANISM',
+    rows:[
+      ['Heads','32 × KM1024'],
+      ['Head dims','89×18×131 mm each'],
+      ['Nozzle pitch','70.5 µm'],
+      ['Print width','1,850 mm'],
+      ['Drop vel','6.0 m/s'],
+      ['Drop size','14 pL'],
+      ['Position','live:cz'],
+    ]
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+let anomaly    = {};
+let hoveredId  = null;
+let selectedId = null;
+let wsConn     = false;
+let demoMode   = false;
+let autoRot    = true;
+const live     = {};
+let   simTick  = 0;
+
+// ═══════════════════════════════════════════════════════════════════
+//  ANOMALY VISUAL
+// ═══════════════════════════════════════════════════════════════════
+function applyVisuals(now) {
+  Object.entries(partWires).forEach(([id, meshes]) => {
+    const s    = demoMode ? 0 : (anomaly[id] || 0);   // no color changes in demo
+    const hvr  = id === hoveredId || id === selectedId;
+    meshes.forEach(m => {
+      if (!m.material || !m.material.color) return;
+      const base  = m.userData.baseColor   ?? 0x003322;
+      const baseO = m.userData.baseOpacity ?? 1;
+      let c = new THREE.Color(base);
+
+      if (s > 0.7) {
+        c.setHex(0x0055ff);
+        m.material.transparent = baseO < 1;
+        m.material.opacity     = baseO;
+      } else if (s > 0.3) {
+        const t = (s-0.3)/0.4;
+        c.lerp(new THREE.Color(0xffaa00), t);
+        m.material.transparent = baseO < 1;
+        m.material.opacity     = baseO;
+      } else {
+        m.material.transparent = baseO < 1;
+        m.material.opacity     = baseO;
+      }
+      if (hvr) c.multiplyScalar(1.4);
+      m.material.color.copy(c);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  HUD BADGES
+// ═══════════════════════════════════════════════════════════════════
+const bdgEls = {};
+document.querySelectorAll('.bdg').forEach(el => {
+  bdgEls[el.dataset.id] = el;
+  el.addEventListener('click', () => { selectedId = el.dataset.id; renderPanel(); });
+});
+document.getElementById('xbtn').addEventListener('click', () => {
+  selectedId = null;
+  document.getElementById('pnl').classList.remove('show');
+});
+
+function updateBadges() {
+  Object.entries(bdgEls).forEach(([id, el]) => {
+    const s = anomaly[id] || 0;
+    el.classList.remove('warn','flt');
+    if (s > 0.7) el.classList.add('flt');
+    else if (s > 0.3) el.classList.add('warn');
+  });
+}
+
+function renderPanel() {
+  const pnl = document.getElementById('pnl');
+  if (!selectedId) { pnl.classList.remove('show'); return; }
+  const def = PINFO[selectedId]; if (!def) return;
+  const s   = anomaly[selectedId] || 0;
+  const cls = s>0.7?'ft':s>0.3?'wn':'ok';
+  const lbl = s>0.7?'FAULT':s>0.3?'WARNING':'NOMINAL';
+
+  document.getElementById('pn').textContent = def.name;
+  document.getElementById('ps').textContent = def.sub;
+
+  let html = '';
+  def.rows.forEach(([k,v]) => {
+    let val = v;
+    if (v==='live:r')   val = live.r_next        !=null ? live.r_next.toFixed(3)+' m' : '—';
+    if (v==='live:dep') val = live.depletion_pct !=null ? live.depletion_pct.toFixed(1)+'%' : '—';
+    if (v==='live:v')   val = live.v_fabric       !=null ? live.v_fabric.toFixed(4)+' m/s' : '—';
+    if (v==='live:cz')  val = `z=${carriageMesh.position.z.toFixed(3)} m`;
+    html += `<div><span class="k">${k}</span>${val}</div>`;
+  });
+  html += `<div><span class="k">Anomaly</span>${(s*100).toFixed(1)}%</div>`;
+  document.getElementById('pr').innerHTML  = html;
+  const pb = document.getElementById('pbdg');
+  pb.className = `pb ${cls}`;
+  pb.textContent = lbl;
+  pnl.classList.add('show');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ORBIT CONTROLS
+// ═══════════════════════════════════════════════════════════════════
+const target = new THREE.Vector3(0,1,0);
+const sph    = new THREE.Spherical();
+{ const v=new THREE.Vector3().subVectors(camera.position,target); sph.setFromVector3(v); }
+let dragging=false, btn=0, ox=0, oy=0, moved=false;
+
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+canvas.addEventListener('mousedown',   e=>{
+  dragging=true; btn=e.button; moved=false; ox=e.clientX; oy=e.clientY;
+});
+window.addEventListener('mousemove',   e=>{
+  const dx=e.clientX-ox, dy=e.clientY-oy;
+  if (dragging) {
+    if (Math.abs(dx)+Math.abs(dy)>2) moved=true;
+    if (btn===0) {
+      sph.theta -= dx*0.006;
+      sph.phi   -= dy*0.006;
+      sph.phi    = Math.max(0.05, Math.min(Math.PI-0.05, sph.phi));
+    } else if (btn===2) {
+      const p=new THREE.Vector3(-dx*0.005,dy*0.005,0).applyQuaternion(camera.quaternion);
+      target.add(p);
+    }
+    ox=e.clientX; oy=e.clientY;
+  }
+  if (!dragging || !moved) {
+    const nx=(e.clientX/innerWidth)*2-1, ny=-(e.clientY/innerHeight)*2+1;
+    doHover(nx,ny,e.clientX,e.clientY);
+  }
+});
+window.addEventListener('mouseup', e=>{
+  if (!moved) {
+    const nx=(e.clientX/innerWidth)*2-1, ny=-(e.clientY/innerHeight)*2+1;
+    doClick(nx,ny);
+  }
+  dragging=false;
+});
+canvas.addEventListener('wheel', e=>{
+  sph.radius=Math.max(2,Math.min(45,sph.radius+e.deltaY*0.015));
+},{passive:true});
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){e.preventDefault();autoRot=!autoRot;}
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  RAYCASTING
+// ═══════════════════════════════════════════════════════════════════
+const RC  = new THREE.Raycaster();
+const tip = document.getElementById('tip');
+
+function rayPart(nx,ny){
+  RC.setFromCamera({x:nx,y:ny},camera);
+  const hits=RC.intersectObjects(boundMeshes);
+  for (const h of hits){ const id=h.object.userData.partId; if(id) return id; }
+  return null;
+}
+function doHover(nx,ny,cx,cy){
+  const id=rayPart(nx,ny);
+  hoveredId=id;
+  if (id) {
+    tip.textContent=PINFO[id]?.name??id;
+    tip.style.left=(cx+14)+'px'; tip.style.top=(cy-10)+'px';
+    tip.classList.add('on');
+  } else tip.classList.remove('on');
+}
+function doClick(nx,ny){
+  const id=rayPart(nx,ny);
+  selectedId = (id && id===selectedId) ? null : id;
+  renderPanel();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ROLL GEOMETRY REBUILD
+// ═══════════════════════════════════════════════════════════════════
+function rebuildRoll(mesh, r, h) {
+  const old=mesh.geometry;
+  const cyl=new THREE.CylinderGeometry(r,r,h,32);
+  mesh.geometry=new THREE.EdgesGeometry(cyl);
+  cyl.dispose(); old.dispose();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════════════════════════════════
+function wsConnect(){
+  let ws;
+  try{ ws=new WebSocket('ws://localhost:8000/ws'); }catch{ startDemo(); return; }
+
+  ws.onopen=()=>{
+    wsConn=true; demoMode=false;
+    const d=document.getElementById('ld');
+    d.style.background='#00ff88'; d.style.boxShadow='0 0 7px #00ff88';
+    document.getElementById('llbl').textContent='LIVE';
+  };
+  ws.onmessage=ev=>{
+    try{
+      const msg=JSON.parse(ev.data);
+      if(msg.type!=='tick') return;
+      const am=msg.anomaly_map||{}, bb=msg.blackboard||{};
+
+      anomaly['PRINTER']  = Math.max(am['P101_sigma_res']||0, am['P101_rho_eff']||0);
+      anomaly['UNWINDER'] = Math.max(am['P101_r_next']||0, am['P101_n_layers']||0, am['P101_rho_eff']||0);
+      anomaly['DRYER']    = am['P101_l_rem']    || 0;
+      anomaly['INK_RACK'] = am['P101_m_roll']   || 0;
+      anomaly['CARRIAGE'] = am['P101_v_fabric']  || 0;
+
+      live.r_next        = bb.r_next;
+      live.v_fabric      = bb.v_fabric;
+      live.depletion_pct = bb.depletion_pct;
+      live.omega_roll    = bb.omega_roll;
+
+      updateBadges();
+      if(selectedId) renderPanel();
+    }catch{}
+  };
+  ws.onclose=()=>{ wsConn=false; startDemo(); setTimeout(wsConnect,4000); };
+  ws.onerror=()=>ws.close();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DEMO MODE
+// ═══════════════════════════════════════════════════════════════════
+const DEMO_IDS=['PRINTER','UNWINDER','DRYER','INK_RACK','CARRIAGE'];
+let demoIdx=0, demoTmr=null;
+
+function startDemo(){
+  if(demoMode) return;
+  demoMode=true;
+  const d=document.getElementById('ld');
+  d.style.background='#ffaa00'; d.style.boxShadow='0 0 7px #ffaa00';
+  document.getElementById('llbl').textContent='DEMO';
+
+  clearInterval(demoTmr);
+  demoTmr=setInterval(()=>{
+    DEMO_IDS.forEach(p=>anomaly[p]=0);
+    anomaly[DEMO_IDS[demoIdx%DEMO_IDS.length]]           = 0.40+Math.random()*0.55;
+    anomaly[DEMO_IDS[(demoIdx+2)%DEMO_IDS.length]]       = 0.15+Math.random()*0.25;
+    live.r_next        = +(0.05+Math.random()*0.25).toFixed(4);
+    live.v_fabric      = +(0.10+Math.random()*0.35).toFixed(4);
+    live.depletion_pct = +(10  +Math.random()*80  ).toFixed(2);
+    demoIdx++;
+    updateBadges();
+    if(selectedId) renderPanel();
+  },4000);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+let rollerTheta = 0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt  = clock.getDelta();
+  const t   = clock.elapsedTime;
+  const now = Date.now();
+  simTick++;
+
+  // ── camera ──────────────────────────────────────────────────────
+  if (autoRot) sph.theta += 0.0005;
+  camera.position.copy(new THREE.Vector3().setFromSpherical(sph).add(target));
+  camera.lookAt(target);
+
+  // ── carriage scan ────────────────────────────────────────────────
+  const cx = Math.sin(t*0.785)*2.400;
+  carriageMesh.position.x   = cx;
+  carriageBound.position.x  = cx;
+  headMeshes.forEach(m=>m.position.x=cx+m.userData.xo);
+
+  // ── ink tubes: rebuild when carriage moved > 0.05 m ─────────────
+  if (Math.abs(cx-lastTubeZ) > 0.05) rebuildInkTubes(cx);
+
+  // ── ink tube pulse dots ──────────────────────────────────────────
+  inkTubes.forEach((tb,i)=>{
+    const pt = ((t*0.55 + tb.phase) % 1);
+    const pos = tb.curve.getPoint(pt);
+    tb.pulse.position.copy(pos);
+    const brt = Math.sin(t*3+i)*0.5+0.5;
+    tb.pulse.material.opacity = brt * (Math.abs(cx)<1.6 ? 0.8 : 0.1);
+  });
+
+  // ── feed rollers spin ────────────────────────────────────────────
+  rollerTheta += 0.8*dt;
+  feedRollers.forEach(m=>m.rotation.x=rollerTheta);
+
+  // ── input roll ──────────────────────────────────────────────────
+  const rInNew  = live.r_next ?? Math.max(0.038, 0.300 - simTick*0.000008);
+  const rOutNew = Math.min(0.200, 0.038 + simTick*0.000005);
+
+  if (Math.abs(rInNew-lastRIn)>0.002) {
+    rebuildRoll(inputRollMesh, rInNew, 2.544);
+    lastRIn = rInNew; rInput = rInNew;
+  }
+  if (Math.abs(rOutNew-lastROut)>0.002) {
+    rebuildRoll(outputRollMesh, rOutNew, 2.534);
+    lastROut = rOutNew; rOutput = rOutNew;
+  }
+
+  // Roll spinning: omega = v_fabric / r_roll
+  const vf = live.v_fabric ?? 0.15;
+  inputRollMesh.rotation.x  += (vf / Math.max(rInput,  0.038)) * dt * 0.5;
+  outputRollMesh.rotation.x -= (vf / Math.max(rOutput, 0.038)) * dt * 0.3;
+
+  // ── heater drum pulse ────────────────────────────────────────────
+  heaterMesh.material.opacity = 0.3 + 0.3*Math.sin(t*2);
+  heaterMesh.rotation.x += 0.3*dt;
+
+  // ── detailed dynamic parts ───────────────────────────────────────
+  driveRoller.rotateY(-1.2*dt);
+  fanBlades.forEach(b => b.rotation.y += 0.08);   // vertical blower fans spin on Y
+  dryerFanMotors.forEach(m => m.rotation.y += 0.08);
+  ventFans.forEach(f => f.rotateY(3.0*dt));
+  // Big motors — spin around their own length axis (X)
+  unwindMotor.rotation.x  -= 0.04;    // M1 unwind
+  carriageMotor.rotation.x += 0.06;   // M2 carriage scan
+  feedMotor.rotation.x     -= 0.03;   // M3 fabric feed
+  winderMotor.rotation.x   -= 0.025;  // M4 winder
+  // Small motors
+  headHeightMotor.rotation.z += 0.02; // M6 head height stepper
+  wiperMotor.rotation.x      += 0.05; // M7 wiper
+  vacuumMotor.rotation.x     += 0.04; // M9 vacuum
+  inkPumpMotors.forEach((m,i) => m.rotation.x += 0.08 + i*0.01); // M8 pumps
+  edgeGuideMotors.forEach(m => m.rotation.z += 0.02);             // M10 edge guides
+
+  // dancer arm system (web-tension swing)
+  const dph = t*0.8;
+  dancerArmL.rotation.x   = 0.3*Math.sin(dph);
+  dancerArmR.rotation.x   = 0.3*Math.sin(dph);
+  dancerRoller.position.z = 2.800 + 0.150*Math.sin(dph);
+  dancerSpring.scale.y    = 1.0   + 0.300*Math.sin(dph);
+
+  // carriage-following parts (cx from carriage scan above)
+  headHeightMotor.position.x = cx;                 // 27
+  leadScrew.position.x       = cx;                 // 28
+  dragBracket.position.x     = cx;                 // drag-chain moving bracket
+  cableChain.position.x      = (-2.300 + cx) / 2;  // 26 anchored drag chain
+  cableChain.scale.x         = Math.abs(cx + 2.300) / 4.6;
+  beltUpper.geometry.setFromPoints([
+    new THREE.Vector3(-2.300, 1.780, 0.400),
+    new THREE.Vector3(cx,     1.780, 0.400),
+  ]);
+
+  // 38 heating coil rows — per-row opacity pulse
+  heatingElements.forEach((row,ri) => {
+    const op = 0.6 + 0.4*Math.sin(t*2 + ri*0.5);
+    row.forEach(m => { m.material.opacity = op; });
+  });
+  // Heat shimmer
+  heatShimmer.material.opacity = 0.02 + 0.02*Math.sin(t*5);
+  heatShimmer.scale.y = 1 + 0.05*Math.sin(t*3);
+  // Capping seal pulse
+  cappingSeal.scale.y = 1 + 0.2*Math.sin(t*0.3);
+
+  // 52 status light tower — pulse the light matching global anomaly
+  {
+    const vals  = Object.values(anomaly);
+    const maxA  = vals.length ? Math.max(...vals) : 0;
+    const pulse = Math.max(0, 0.4 + 0.6*Math.sin(t*4));
+    const act   = maxA >= 0.7 ? 0 : (maxA < 0.3 ? 2 : 1);  // 0=red 1=amber 2=green
+    statusLights.forEach((s,i) => { s.material.opacity = (i===act ? pulse : 0.1); });
+  }
+
+  // ── anomaly coloring + hover ─────────────────────────────────────
+  applyVisuals(now);
+
+  // ── update panel if open ─────────────────────────────────────────
+  if (selectedId) renderPanel();
+
+  renderer.render(scene,camera);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════════════════════════
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════════
+wsConnect();
+setTimeout(()=>{ if(!wsConn) startDemo(); },2000);
+animate();
+
+/*
+  server/main.py route (already registered):
+  @app.get("/3dv2", response_class=HTMLResponse)
+  async def serve_3dv2():
+      html_path = Path(__file__).parent.parent / "ui" / "nassenger_3d_v2.html"
+      return html_path.read_text(encoding="utf-8")
+*/
+</script>
+</body>
+</html>

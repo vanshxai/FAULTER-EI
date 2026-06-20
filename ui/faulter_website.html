@@ -167,17 +167,57 @@ footer{border-top:1px solid var(--border);padding:36px 48px;display:flex;align-i
 footer p{font-size:12px;color:var(--muted)}
 .div{height:1px;background:var(--border)}
 
-/* RESPONSIVE */
+/* RESPONSIVE — TABLET LARGE (≤1100px) */
+@media(max-width:1100px){
+  nav{padding:0 28px;gap:20px}
+  .nav-links{gap:18px}
+  .nav-links a{font-size:12px}
+  .hero{padding:90px 28px 80px}
+  section{padding:72px 28px}
+  .how{padding:72px 28px}
+  .cta{padding:72px 28px}
+  footer{padding:28px 28px}
+  .pillars{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:repeat(2,1fr);gap:40px}
+  #fault-panel{right:24px;min-width:208px}
+}
+
+/* RESPONSIVE — SMALL TABLET / PHABLET (≤800px) */
 @media(max-width:800px){
-  nav{padding:0 20px;gap:16px}.nav-links{display:none}
-  .hero{padding:80px 20px 120px}.hero-fade{background:rgba(6,14,24,.90)}
-  #fault-panel{display:none}
-  #fault-badge{left:16px;bottom:130px}
+  nav{padding:0 20px;gap:16px}
+  .nav-links{display:none}
+  .hero{padding:80px 20px 100px}
+  .hero-fade{background:linear-gradient(90deg,rgba(6,14,24,.97) 50%,rgba(6,14,24,.65) 80%,rgba(6,14,24,.22) 100%)}
+  .hero-content{max-width:100%}
+  #fault-panel{right:16px;min-width:176px;top:auto;bottom:88px;transform:none;max-height:44vh;overflow-y:auto}
+  .fp-name{font-size:11px}
+  .fp-loc{font-size:9px}
+  .fp-item{padding:7px 10px}
+  #fault-badge{left:16px;bottom:100px}
   #explore-hint{display:none}
   #model-id{display:none}
-  section{padding:64px 20px}
-  .pillars{grid-template-columns:1fr}.steps{grid-template-columns:1fr;gap:36px}
-  footer{padding:28px 20px;flex-direction:column;align-items:flex-start}.footer-links{display:none}
+  section{padding:60px 20px}
+  .how{padding:60px 20px}
+  .cta{padding:60px 20px}
+  .pillars{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr;gap:32px}
+  footer{padding:24px 20px;flex-direction:column;align-items:flex-start}
+  .footer-links{display:none}
+}
+
+/* RESPONSIVE — PHONE (≤480px) */
+@media(max-width:480px){
+  .hero{padding:80px 16px 80px}
+  .hero-fade{background:linear-gradient(90deg,rgba(6,14,24,.99) 55%,rgba(6,14,24,.80) 80%,rgba(6,14,24,.35) 100%)}
+  .nav-btn{padding:6px 12px;font-size:11px}
+  #fault-panel{display:none}
+  #fault-badge{left:12px;bottom:72px}
+  section{padding:52px 16px}
+  .how{padding:52px 16px}
+  .cta{padding:52px 16px}
+  footer{padding:20px 16px}
+  .email-form{flex-direction:column}
+  .email-form input{min-width:0;width:100%}
 }
 </style>
 </head>
@@ -201,7 +241,7 @@ footer p{font-size:12px;color:var(--muted)}
   <div class="hero-content">
     <p class="hero-eyebrow">Industrial AI monitoring</p>
     <h1>Catch the fault.<br>Not the <em>shutdown</em>.</h1>
-    <p class="hero-sub">Real-time anomaly detection and live 3D digital twin visualization for high-precision industrial machinery.</p>
+    <p class="hero-sub">Real-time anomaly prediction and live 3D digital twin visualization for high-precision industrial machinery.</p>
     <div class="hero-actions">
       <a href="#contact" class="btn-primary">Request a demo</a>
       <a href="/3dv2" class="btn-ghost">
@@ -244,7 +284,7 @@ footer p{font-size:12px;color:var(--muted)}
     <div class="pillars">
       <div class="pillar">
         <div class="pillar-bar b-teal"></div>
-        <span class="pillar-n">01 — Detect</span>
+        <span class="pillar-n">01 — Predict</span>
         <h3>Anomaly engine</h3>
         <p>A multi-layer AI agent pipeline continuously validates physics signals — velocity, tension, torque, temperature — and scores each subsystem for drift in real time.</p>
       </div>
@@ -297,11 +337,15 @@ footer p{font-size:12px;color:var(--muted)}
     <span class="label" style="display:block;text-align:center">Get in touch</span>
     <h2>See it on your machine</h2>
     <p class="section-sub" style="margin:0 auto 36px">We'll run a live demo with real simulation and fault injection against a digital twin of your equipment.</p>
-    <div class="email-form">
-      <input type="email" placeholder="Work email">
-      <button class="btn-primary">Request demo</button>
+    <div class="email-form" id="demo-form">
+      <input type="email" id="demo-email" placeholder="Work email" required>
+      <button class="btn-primary" type="button" onclick="submitDemoRequest()">Request demo</button>
     </div>
-    <p class="cta-note">No sales deck. Engineers only.</p>
+    <p class="cta-note" id="demo-note">No sales deck. Engineers only.</p>
+    <p class="cta-note" style="margin-top:20px">Or reach us directly on WhatsApp —
+      <a href="https://wa.me/917984874156" target="_blank" rel="noopener"
+         style="color:var(--teal);text-decoration:none;font-weight:500">+91 79848 74156</a>
+    </p>
   </div>
 </section>
 
@@ -920,6 +964,27 @@ footer p{font-size:12px;color:var(--muted)}
     });
   });
 })();
+
+function submitDemoRequest() {
+  const input = document.getElementById('demo-email');
+  const note  = document.getElementById('demo-note');
+  const email = input.value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    input.style.borderColor = 'var(--orange)';
+    input.focus();
+    return;
+  }
+  input.style.borderColor = '';
+  const msg = encodeURIComponent('New demo request from FAULTER·EI website\nEmail: ' + email);
+  window.open('https://wa.me/917984874156?text=' + msg, '_blank');
+  input.value = '';
+  note.textContent = '✓ Opening WhatsApp — your request is on its way.';
+  note.style.color = 'var(--teal)';
+  setTimeout(() => {
+    note.textContent = 'No sales deck. Engineers only.';
+    note.style.color = '';
+  }, 5000);
+}
 </script>
 </body>
 </html>

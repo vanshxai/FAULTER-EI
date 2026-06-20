@@ -3,6 +3,7 @@
   "outputDirectory": ".",
   "rewrites": [
     { "source": "/",     "destination": "/ui/faulter_website.html" },
-    { "source": "/home", "destination": "/ui/faulter_website.html" }
+    { "source": "/home", "destination": "/ui/faulter_website.html" },
+    { "source": "/twin", "destination": "/ui/nassenger_3d_v2.html" }
   ]
 }

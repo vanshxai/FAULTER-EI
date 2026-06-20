@@ -1,0 +1,8 @@
+{
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/",     "destination": "/ui/faulter_website.html" },
+    { "source": "/home", "destination": "/ui/faulter_website.html" }
+  ]
+}

@@ -72,15 +72,50 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:56px;display:flex;ali
   transition:opacity .5s;white-space:nowrap
 }
 
-/* FAULT SEVERITY LEGEND */
-.fault-legend{position:absolute;bottom:44px;right:44px;z-index:2;display:flex;flex-direction:column;gap:9px;background:rgba(6,14,24,.78);border:1px solid var(--border);padding:14px 18px;border-radius:6px;backdrop-filter:blur(8px);pointer-events:none}
-.legend-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
-.legend-item{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--muted)}
+/* FAULT PANEL */
+#fault-panel{
+  position:absolute;right:44px;top:50%;transform:translateY(-50%);
+  z-index:3;min-width:228px;
+  background:rgba(6,14,24,.90);border:1px solid var(--border);
+  border-radius:8px;backdrop-filter:blur(12px);overflow:hidden
+}
+.fp-header{
+  padding:11px 16px;border-bottom:1px solid var(--border);
+  font-size:9px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);font-weight:600
+}
+.fp-item{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 14px 9px 12px;cursor:pointer;
+  border-left:2px solid transparent;
+  border-bottom:1px solid rgba(0,160,110,.05);
+  transition:background .15s,border-color .15s
+}
+.fp-item:hover{background:rgba(0,160,110,.07)}
+.fp-item.fp-active{background:rgba(255,255,255,.04)}
+.fp-item.fp-active.fp-warn{border-left-color:var(--amber)}
+.fp-item.fp-active.fp-flt {border-left-color:var(--orange)}
+.fp-item.fp-active.fp-crit{border-left-color:var(--red)}
+.fp-info{flex:1;min-width:0}
+.fp-name{font-size:12px;color:var(--text);font-weight:500}
+.fp-loc {font-size:10px;color:var(--muted);margin-top:1px}
+.fp-dot {width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.fp-dot.d-warn{background:var(--amber)}
+.fp-dot.d-flt {background:var(--orange)}
+.fp-dot.d-crit{background:var(--red)}
+.fp-clear-btn{
+  padding:10px 16px;text-align:center;
+  font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted);cursor:pointer;transition:color .15s;
+  border-top:1px solid var(--border)
+}
+.fp-clear-btn:hover{color:var(--text)}
+/* keep dots for badge legend */
 .legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .ld-ok  {background:var(--teal)}
-.ld-warn{background:var(--amber); animation:blink 1.6s infinite}
-.ld-flt {background:var(--orange);animation:blink .95s infinite}
-.ld-crit{background:var(--red);   animation:blink .55s infinite}
+.ld-warn{background:var(--amber)}
+.ld-flt {background:var(--orange)}
+.ld-crit{background:var(--red)}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
 
 /* SECTIONS */
@@ -131,7 +166,7 @@ footer p{font-size:12px;color:var(--muted)}
 @media(max-width:800px){
   nav{padding:0 20px;gap:16px}.nav-links{display:none}
   .hero{padding:80px 20px 120px}.hero-fade{background:rgba(6,14,24,.90)}
-  .fault-legend{right:12px;bottom:16px;padding:10px 14px}
+  #fault-panel{display:none}
   #fault-badge{left:16px;bottom:130px}
   #explore-hint{display:none}
   section{padding:64px 20px}
@@ -179,18 +214,12 @@ footer p{font-size:12px;color:var(--muted)}
 
   <!-- Drag hint — fades after first interaction -->
   <div id="explore-hint">
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"><circle cx="7" cy="7" r="5"/><path d="M7 4v3l2 1"/></svg>
-    Drag to orbit &nbsp;·&nbsp; Scroll to zoom
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"><circle cx="7" cy="7" r="5"/><path d="M4 7h6M7 4v6"/></svg>
+    Drag to orbit
   </div>
 
-  <!-- Severity legend -->
-  <div class="fault-legend">
-    <p class="legend-title">Fault severity</p>
-    <div class="legend-item"><span class="legend-dot ld-ok"></span>Nominal</div>
-    <div class="legend-item"><span class="legend-dot ld-warn"></span>Warning</div>
-    <div class="legend-item"><span class="legend-dot ld-flt"></span>Fault</div>
-    <div class="legend-item"><span class="legend-dot ld-crit"></span>Critical</div>
-  </div>
+  <!-- Clickable fault panel — populated by JS -->
+  <div id="fault-panel"></div>
 </section>
 
 <!-- PLATFORM -->
@@ -400,17 +429,36 @@ footer p{font-size:12px;color:var(--muted)}
   const encDisc=add(wire(new THREE.CylinderGeometry(0.038,0.038,0.005,20),C.blue,0.62));
   encDisc.rotation.z=Math.PI/2; encDisc.position.x=-0.700;
 
-  // Cooling fan group (NDE, counter-rotates to motor shaft)
-  const fanGroup=new THREE.Group(); fanGroup.position.x=-0.560; scene.add(fanGroup);
-  for(let i=0;i<4;i++){
-    const a=(i/4)*Math.PI*2;
-    const blade=wire(new THREE.BoxGeometry(0.012,0.130,0.035),C.dim,0.62);
-    blade.position.set(0,Math.sin(a)*0.095,Math.cos(a)*0.095);
-    blade.rotation.x=a; fanGroup.add(blade);
+  // Cooling fan group (NDE) — 6 pitched blades
+  const fanGroup=new THREE.Group(); fanGroup.position.x=-0.562; scene.add(fanGroup);
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2;
+    const blade=wire(new THREE.BoxGeometry(0.013,0.112,0.040),C.dim,0.65);
+    blade.position.set(0,Math.sin(a)*0.086,Math.cos(a)*0.086);
+    blade.rotation.x=a+0.22; fanGroup.add(blade);
   }
-  // Fan cover/guard
-  const fanGuard=add(wire(new THREE.TorusGeometry(0.175,0.007,4,18),C.dim,0.55));
-  fanGuard.rotation.y=Math.PI/2; fanGuard.position.x=-0.542;
+  // Fan hub disc
+  const fanHub=wire(new THREE.CylinderGeometry(0.030,0.030,0.020,10),C.mid,0.70);
+  fanHub.rotation.x=Math.PI/2; fanGroup.add(fanHub);
+
+  // ── FAN COWL HOUSING ─────────────────────────────────────────────
+  // The cylindrical hood over the NDE fan — the single most recognisable
+  // feature that makes a motor look like a motor.
+  const cowlShell=add(wire(new THREE.CylinderGeometry(0.228,0.228,0.200,20),C.dim,0.48));
+  cowlShell.rotation.z=Math.PI/2; cowlShell.position.x=-0.608;
+  // Inlet ring at NDE tip (air is sucked in here)
+  const cowlInlet=add(wire(new THREE.TorusGeometry(0.190,0.013,5,20),C.dim,0.72));
+  cowlInlet.rotation.y=Math.PI/2; cowlInlet.position.x=-0.710;
+  // Rear flange that bolts to the motor end-bell
+  const cowlFlange=add(wire(new THREE.TorusGeometry(0.215,0.010,4,22),C.dim,0.62));
+  cowlFlange.rotation.y=Math.PI/2; cowlFlange.position.x=-0.507;
+  // Six longitudinal vent slots cut into the cowl
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2;
+    const vs=add(wire(new THREE.BoxGeometry(0.115,0.020,0.005),C.dim,0.34));
+    vs.position.set(-0.608,Math.sin(a)*0.192,Math.cos(a)*0.192);
+    vs.rotation.x=a;
+  }
 
   // Rotor (ghost — very faint, adds depth)
   const rotor=add(wire(new THREE.CylinderGeometry(0.132,0.132,0.82,24),C.teal,0.09));
@@ -589,12 +637,9 @@ footer p{font-size:12px;color:var(--muted)}
   let activeFault  = null;
   let countdown    = 110;
   let holding      = false;
+  let manualMode   = false; // true when user clicked a fault — suspends auto-cycle
 
-  function triggerFault(){
-    activeFault = FAULT_DEFS[Math.floor(Math.random()*FAULT_DEFS.length)];
-    holding     = true;
-    countdown   = 65 + Math.floor(Math.random()*90);
-    // Show badge
+  function _showBadge(){
     const s = SEV[activeFault.severity];
     badge.className     = s.cls;
     badge.querySelector('.fb-sev').textContent  = s.label;
@@ -604,18 +649,71 @@ footer p{font-size:12px;color:var(--muted)}
     requestAnimationFrame(()=>{ badge.style.opacity='1'; });
   }
 
-  function clearFault(){
+  function _hideBadge(){
+    badge.style.opacity='0';
+    setTimeout(()=>{ badge.style.display='none'; },380);
+  }
+
+  function _restoreParts(){
     if(activeFault){
       activeFault.parts.forEach(m=>{
         m.material.color.setHex(m.userData.bc);
-        m.material.opacity = m.userData.bo;
+        m.material.opacity=m.userData.bo;
       });
-      activeFault = null;
     }
-    holding   = false;
-    countdown = 88 + Math.floor(Math.random()*88);
-    badge.style.opacity = '0';
-    setTimeout(()=>{ badge.style.display='none'; }, 380);
+  }
+
+  function triggerFault(idx){
+    _restoreParts();
+    activeFault = (idx===undefined)
+      ? FAULT_DEFS[Math.floor(Math.random()*FAULT_DEFS.length)]
+      : FAULT_DEFS[idx];
+    holding   = true;
+    countdown = 65 + Math.floor(Math.random()*90);
+    _showBadge();
+    _updatePanel();
+  }
+
+  function clearFault(){
+    _restoreParts();
+    activeFault = null;
+    holding     = false;
+    manualMode  = false;
+    countdown   = 88 + Math.floor(Math.random()*88);
+    _hideBadge();
+    _updatePanel();
+  }
+
+  // ── FAULT PANEL (clickable list) ─────────────────────────────────
+  const panel = document.getElementById('fault-panel');
+  const sevCls= {WARNING:'fp-warn',FAULT:'fp-flt',CRITICAL:'fp-crit'};
+  const dotCls= {WARNING:'d-warn', FAULT:'d-flt', CRITICAL:'d-crit'};
+
+  panel.innerHTML =
+    '<div class="fp-header">Fault Library</div>' +
+    FAULT_DEFS.map((f,i)=>
+      `<div class="fp-item ${sevCls[f.severity]}" data-idx="${i}">
+        <span class="fp-dot ${dotCls[f.severity]}"></span>
+        <div class="fp-info">
+          <div class="fp-name">${f.name}</div>
+          <div class="fp-loc">${f.location}</div>
+        </div>
+      </div>`
+    ).join('') +
+    '<div class="fp-clear-btn" id="fp-clear-btn">— Clear —</div>';
+
+  panel.querySelectorAll('.fp-item').forEach(item=>{
+    item.addEventListener('click',()=>{
+      manualMode = true;
+      triggerFault(parseInt(item.dataset.idx));
+    });
+  });
+  document.getElementById('fp-clear-btn').addEventListener('click', clearFault);
+
+  function _updatePanel(){
+    panel.querySelectorAll('.fp-item').forEach((item,i)=>{
+      item.classList.toggle('fp-active', activeFault===FAULT_DEFS[i]);
+    });
   }
 
   // ── ANIMATE ──────────────────────────────────────────────────────
@@ -640,11 +738,13 @@ footer p{font-size:12px;color:var(--muted)}
     // Fan counter-rotates (cooling fan runs opposite to motor shaft)
     fanGroup.rotation.x = -ang * 1.15;
 
-    // Fault cycle
-    countdown--;
-    if(countdown <= 0){
-      if(holding) clearFault();
-      else        triggerFault();
+    // Fault cycle — suspended while user has manually selected a fault
+    if(!manualMode){
+      countdown--;
+      if(countdown <= 0){
+        if(holding) clearFault();
+        else        triggerFault();
+      }
     }
 
     // Pulse the faulty parts in their severity color

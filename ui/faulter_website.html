@@ -110,6 +110,11 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:56px;display:flex;ali
   border-top:1px solid var(--border)
 }
 .fp-clear-btn:hover{color:var(--text)}
+/* DIAGRAM ID LABEL */
+#model-id{position:absolute;bottom:18%;left:65%;transform:translateX(-50%);z-index:2;pointer-events:none;display:flex;align-items:center;gap:14px;white-space:nowrap;background:rgba(6,14,24,.55);padding:9px 20px;border:1px solid rgba(0,223,168,.14);border-radius:3px}
+#model-id span{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;color:rgba(0,223,168,.72)}
+#model-id .mid-dot{color:rgba(0,223,168,.28);font-size:16px;line-height:1}
+
 /* keep dots for badge legend */
 .legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .ld-ok  {background:var(--teal)}
@@ -169,6 +174,7 @@ footer p{font-size:12px;color:var(--muted)}
   #fault-panel{display:none}
   #fault-badge{left:16px;bottom:130px}
   #explore-hint{display:none}
+  #model-id{display:none}
   section{padding:64px 20px}
   .pillars{grid-template-columns:1fr}.steps{grid-template-columns:1fr;gap:36px}
   footer{padding:28px 20px;flex-direction:column;align-items:flex-start}.footer-links{display:none}
@@ -216,6 +222,13 @@ footer p{font-size:12px;color:var(--muted)}
   <div id="explore-hint">
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".6"><circle cx="7" cy="7" r="5"/><path d="M4 7h6M7 4v6"/></svg>
     Drag to orbit
+  </div>
+
+  <!-- Fixed machine identification label -->
+  <div id="model-id">
+    <span>AC Induction Motor</span>
+    <span class="mid-dot">·</span>
+    <span>Centrifugal Pump Set</span>
   </div>
 
   <!-- Clickable fault panel — populated by JS -->
@@ -304,6 +317,15 @@ footer p{font-size:12px;color:var(--muted)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineSegmentsGeometry.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineMaterial.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lines/LineSegments2.js"></script>
 <script>
 (function(){
   const canvas  = document.getElementById('bg-canvas');
@@ -312,9 +334,10 @@ footer p{font-size:12px;color:var(--muted)}
   const hero    = canvas.parentElement;
   let W = hero.clientWidth, H = hero.clientHeight;
 
-  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   renderer.setSize(W,H);
+  renderer.setClearColor(0x060e18, 1);
 
   const scene  = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(44,W/H,0.1,100);
@@ -330,6 +353,17 @@ footer p{font-size:12px;color:var(--muted)}
   controls.enablePan       = false;
   controls.autoRotate      = true;
   controls.autoRotateSpeed = 0.55;
+
+  // ── BLOOM POST-PROCESSING ─────────────────────────────────────────
+  const composer  = new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  const bloomPass = new THREE.UnrealBloomPass(
+    new THREE.Vector2(W, H),
+    0.30,  // strength  — very subtle, just a faint edge halo
+    0.18,  // radius    — tight, doesn't spread far
+    0.40   // threshold — only the brightest teal lines glow at all
+  );
+  composer.addPass(bloomPass);
   // Fade hint after first touch
   canvas.addEventListener('pointerdown', ()=>{
     hint.style.opacity='0';
@@ -353,12 +387,26 @@ footer p{font-size:12px;color:var(--muted)}
     m.userData.bo = op===undefined?.84:op;
     return m;
   }
+  // Fat-line variant using LineSegments2 — gives real pixel linewidth
+  function wireThick(geo, hex, lw, op){
+    const _op = op !== undefined ? op : 0.92;
+    const g2  = new THREE.LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(geo));
+    const mat = new THREE.LineMaterial({
+      color: hex, linewidth: lw || 2.5,
+      transparent: true, opacity: _op,
+      resolution: new THREE.Vector2(W, H)
+    });
+    const m = new THREE.LineSegments2(g2, mat);
+    m.userData.bc = hex;
+    m.userData.bo = _op;
+    return m;
+  }
   function add(mesh){ scene.add(mesh); return mesh; }
 
   const C={dim:0x003322,teal:0x00dfa8,blue:0x0090d9,amber:0xd99200,grey:0x002838,mid:0x005544};
 
   // ── MOTOR BODY (horizontal, shaft axis = X) ──────────────────────
-  const mBody = add(wire(new THREE.CylinderGeometry(0.20,0.20,0.86,28),C.teal,0.62));
+  const mBody = add(wireThick(new THREE.CylinderGeometry(0.20,0.20,0.86,28),C.teal,3.5,0.95));
   mBody.rotation.z = Math.PI/2;
 
   // Cooling fin rings (10 evenly spaced)
@@ -370,9 +418,9 @@ footer p{font-size:12px;color:var(--muted)}
   }
 
   // End bells (slightly wider than frame)
-  const ebNDE=add(wire(new THREE.CylinderGeometry(0.215,0.200,0.09,24),C.mid,0.80));
+  const ebNDE=add(wireThick(new THREE.CylinderGeometry(0.215,0.200,0.09,24),0x008866,2.5,0.88));
   ebNDE.rotation.z=Math.PI/2; ebNDE.position.x=-0.475;
-  const ebDE =add(wire(new THREE.CylinderGeometry(0.215,0.200,0.09,24),C.mid,0.80));
+  const ebDE =add(wireThick(new THREE.CylinderGeometry(0.215,0.200,0.09,24),0x008866,2.5,0.88));
   ebDE.rotation.z=Math.PI/2;  ebDE.position.x= 0.475;
 
   // Vent slots ring on end bells
@@ -395,7 +443,7 @@ footer p{font-size:12px;color:var(--muted)}
   nameplate.position.set(-0.08,0.222,0.10);
 
   // Terminal box (top)
-  const termBox=add(wire(new THREE.BoxGeometry(0.22,0.13,0.18),C.grey));
+  const termBox=add(wireThick(new THREE.BoxGeometry(0.22,0.13,0.18),0x0077aa,2.5,0.88));
   termBox.position.set(0,0.30,0);
   // Conduit
   const cond=add(wire(new THREE.CylinderGeometry(0.022,0.022,0.08,8),C.grey,0.55));
@@ -412,9 +460,9 @@ footer p{font-size:12px;color:var(--muted)}
   });
 
   // Bearing housings
-  const bhNDE=add(wire(new THREE.CylinderGeometry(0.055,0.055,0.055,16),C.grey,0.82));
+  const bhNDE=add(wireThick(new THREE.CylinderGeometry(0.055,0.055,0.055,16),0x006677,2.0,0.90));
   bhNDE.rotation.z=Math.PI/2; bhNDE.position.x=-0.570;
-  const bhDE =add(wire(new THREE.CylinderGeometry(0.065,0.065,0.060,16),C.grey,0.82));
+  const bhDE =add(wireThick(new THREE.CylinderGeometry(0.065,0.065,0.060,16),0x006677,2.0,0.90));
   bhDE.rotation.z=Math.PI/2;  bhDE.position.x= 0.570;
 
   // Grease nipples on bearings
@@ -433,24 +481,24 @@ footer p{font-size:12px;color:var(--muted)}
   const fanGroup=new THREE.Group(); fanGroup.position.x=-0.562; scene.add(fanGroup);
   for(let i=0;i<6;i++){
     const a=(i/6)*Math.PI*2;
-    const blade=wire(new THREE.BoxGeometry(0.013,0.112,0.040),C.dim,0.65);
-    blade.position.set(0,Math.sin(a)*0.086,Math.cos(a)*0.086);
+    const blade=wire(new THREE.BoxGeometry(0.013,0.118,0.044),0x00bb88,0.92);
+    blade.position.set(0,Math.sin(a)*0.088,Math.cos(a)*0.088);
     blade.rotation.x=a+0.22; fanGroup.add(blade);
   }
   // Fan hub disc
-  const fanHub=wire(new THREE.CylinderGeometry(0.030,0.030,0.020,10),C.mid,0.70);
+  const fanHub=wire(new THREE.CylinderGeometry(0.030,0.030,0.020,10),0x009966,0.85);
   fanHub.rotation.x=Math.PI/2; fanGroup.add(fanHub);
 
   // ── FAN COWL HOUSING ─────────────────────────────────────────────
   // The cylindrical hood over the NDE fan — the single most recognisable
   // feature that makes a motor look like a motor.
-  const cowlShell=add(wire(new THREE.CylinderGeometry(0.228,0.228,0.200,20),C.dim,0.48));
+  const cowlShell=add(wireThick(new THREE.CylinderGeometry(0.228,0.228,0.200,20),0x005566,3.0,0.82));
   cowlShell.rotation.z=Math.PI/2; cowlShell.position.x=-0.608;
   // Inlet ring at NDE tip (air is sucked in here)
-  const cowlInlet=add(wire(new THREE.TorusGeometry(0.190,0.013,5,20),C.dim,0.72));
+  const cowlInlet=add(wireThick(new THREE.TorusGeometry(0.190,0.013,5,20),0x006677,2.5,0.90));
   cowlInlet.rotation.y=Math.PI/2; cowlInlet.position.x=-0.710;
   // Rear flange that bolts to the motor end-bell
-  const cowlFlange=add(wire(new THREE.TorusGeometry(0.215,0.010,4,22),C.dim,0.62));
+  const cowlFlange=add(wire(new THREE.TorusGeometry(0.215,0.010,4,22),C.dim,0.55));
   cowlFlange.rotation.y=Math.PI/2; cowlFlange.position.x=-0.507;
   // Six longitudinal vent slots cut into the cowl
   for(let i=0;i<6;i++){
@@ -460,9 +508,36 @@ footer p{font-size:12px;color:var(--muted)}
     vs.rotation.x=a;
   }
 
-  // Rotor (ghost — very faint, adds depth)
-  const rotor=add(wire(new THREE.CylinderGeometry(0.132,0.132,0.82,24),C.teal,0.09));
-  rotor.rotation.z=Math.PI/2;
+  // ── STATOR TEETH (visible through wireframe housing) ─────────────
+  // 18 lamination teeth radiating inward — what makes the interior look
+  // like a real motor rather than a tube
+  for(let i=0;i<18;i++){
+    const a=(i/18)*Math.PI*2;
+    const tooth=add(wire(new THREE.BoxGeometry(0.76,0.010,0.055),0x004455,0.55));
+    tooth.position.set(0,Math.sin(a)*0.163,Math.cos(a)*0.163);
+    tooth.rotation.x=a;
+  }
+
+  // ── ROTOR + SQUIRREL CAGE ─────────────────────────────────────────
+  // Everything in rotorGroup spins with the shaft
+  const rotorGroup=new THREE.Group(); scene.add(rotorGroup);
+  // Rotor cylinder — very faint, just suggests the core shape
+  const rotor=wire(new THREE.CylinderGeometry(0.130,0.130,0.80,24),C.teal,0.07);
+  rotor.rotation.z=Math.PI/2; rotorGroup.add(rotor);
+  // 16 squirrel-cage bars — kept subtle so they don't bleed through the housing
+  for(let i=0;i<16;i++){
+    const a=(i/16)*Math.PI*2;
+    const bar=wire(new THREE.CylinderGeometry(0.007,0.007,0.78,6),0xd99200,0.30);
+    bar.rotation.z=Math.PI/2;
+    bar.position.set(0,Math.sin(a)*0.110,Math.cos(a)*0.110);
+    rotorGroup.add(bar);
+  }
+  // End rings connecting all bars at each end (two short-circuit rings)
+  [-0.40,0.40].forEach(x=>{
+    const ring=wire(new THREE.TorusGeometry(0.110,0.009,4,16),0xd99200,0.65);
+    ring.rotation.y=Math.PI/2; ring.position.x=x;
+    rotorGroup.add(ring);
+  });
 
   // Sensors
   const vibSens=add(wire(new THREE.CylinderGeometry(0.017,0.017,0.042,8),C.blue,0.95));
@@ -474,16 +549,16 @@ footer p{font-size:12px;color:var(--muted)}
   scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(cPts),new THREE.LineBasicMaterial({color:C.grey,opacity:.32,transparent:true})));
 
   // ── FLEXIBLE JAW COUPLING ────────────────────────────────────────
-  const coupA=add(wire(new THREE.CylinderGeometry(0.055,0.055,0.068,16),C.mid,0.85));
+  const coupA=add(wireThick(new THREE.CylinderGeometry(0.055,0.055,0.068,16),0x007755,2.0,0.88));
   coupA.rotation.z=Math.PI/2; coupA.position.x=0.663;
   const spider=add(wire(new THREE.TorusGeometry(0.048,0.013,3,6),C.amber,0.92));
   spider.rotation.y=Math.PI/2; spider.position.x=0.703;
-  const coupB=add(wire(new THREE.CylinderGeometry(0.055,0.055,0.068,16),C.mid,0.85));
+  const coupB=add(wireThick(new THREE.CylinderGeometry(0.055,0.055,0.068,16),0x007755,2.0,0.88));
   coupB.rotation.z=Math.PI/2; coupB.position.x=0.743;
 
   // ── CENTRIFUGAL PUMP ─────────────────────────────────────────────
   // Stub shaft / mechanical seal housing
-  const sealHouse=add(wire(new THREE.CylinderGeometry(0.068,0.068,0.160,16),C.mid,0.80));
+  const sealHouse=add(wireThick(new THREE.CylinderGeometry(0.068,0.068,0.160,16),0x007766,2.0,0.85));
   sealHouse.rotation.z=Math.PI/2; sealHouse.position.x=0.882;
   const sealGland=add(wire(new THREE.CylinderGeometry(0.054,0.054,0.018,12),C.grey,0.70));
   sealGland.rotation.z=Math.PI/2; sealGland.position.x=0.962;
@@ -493,7 +568,7 @@ footer p{font-size:12px;color:var(--muted)}
   backCover.rotation.z=Math.PI/2; backCover.position.x=1.002;
 
   // Pump volute casing (main body — recognisable round disc)
-  const pumpCasing=add(wire(new THREE.CylinderGeometry(0.262,0.262,0.200,24),C.teal,0.58));
+  const pumpCasing=add(wireThick(new THREE.CylinderGeometry(0.262,0.262,0.200,24),C.teal,3.5,0.92));
   pumpCasing.rotation.z=Math.PI/2; pumpCasing.position.x=1.112;
 
   // Volute scroll bump (tangential discharge tongue — the "snail" feature)
@@ -501,19 +576,32 @@ footer p{font-size:12px;color:var(--muted)}
   scrollBump.position.set(1.112, 0.298, 0);
 
   // Front cover (with suction opening in centre → looks like a washer)
-  const frontRing=add(wire(new THREE.TorusGeometry(0.200,0.062,8,24),C.mid,0.72));
+  const frontRing=add(wireThick(new THREE.TorusGeometry(0.200,0.062,8,24),0x008877,2.5,0.85));
   frontRing.rotation.y=Math.PI/2; frontRing.position.x=1.228;
 
-  // Impeller (spinning inside, faint — 6-sided = 6 blades suggestion)
-  const impeller=add(wire(new THREE.CylinderGeometry(0.200,0.200,0.100,6),C.teal,0.18));
-  impeller.rotation.z=Math.PI/2; impeller.position.x=1.112;
-  const impHub=add(wire(new THREE.CylinderGeometry(0.040,0.040,0.115,8),C.mid,0.18));
-  impHub.rotation.z=Math.PI/2; impHub.position.x=1.112;
+  // ── PUMP IMPELLER (6 radial blades spinning inside the volute casing) ──
+  const impellerGroup = new THREE.Group();
+  impellerGroup.position.set(1.112, 0, 0);
+  scene.add(impellerGroup);
+  // Central hub boss
+  const impHub = wire(new THREE.CylinderGeometry(0.038,0.038,0.082,8),0x00dfa8,0.82);
+  impHub.rotation.z = Math.PI/2; impellerGroup.add(impHub);
+  // 6 blades — each a flat box radiating from hub to near the casing wall
+  for(let i=0;i<6;i++){
+    const a = (i/6)*Math.PI*2;
+    const blade = wire(new THREE.BoxGeometry(0.078,0.140,0.020),0x00dfa8,0.88);
+    blade.position.set(0, Math.sin(a)*0.112, Math.cos(a)*0.112);
+    blade.rotation.x = a;
+    impellerGroup.add(blade);
+  }
+  // Outer shroud ring at blade tips
+  const impShroud = wire(new THREE.TorusGeometry(0.182,0.007,4,24),0x00dfa8,0.72);
+  impShroud.rotation.y = Math.PI/2; impellerGroup.add(impShroud);
 
   // Suction nozzle — enters axially from right (+X), large bore
-  const suctPipe=add(wire(new THREE.CylinderGeometry(0.090,0.090,0.320,16),C.teal,0.68));
+  const suctPipe=add(wireThick(new THREE.CylinderGeometry(0.090,0.090,0.320,16),C.teal,2.5,0.88));
   suctPipe.rotation.z=Math.PI/2; suctPipe.position.x=1.388;
-  const suctFlange=add(wire(new THREE.CylinderGeometry(0.138,0.138,0.022,16),C.mid,0.74));
+  const suctFlange=add(wireThick(new THREE.CylinderGeometry(0.138,0.138,0.022,16),0x008877,2.0,0.82));
   suctFlange.rotation.z=Math.PI/2; suctFlange.position.x=1.552;
   // Suction flange bolts (4)
   for(let i=0;i<4;i++){
@@ -524,7 +612,7 @@ footer p{font-size:12px;color:var(--muted)}
   }
 
   // Discharge nozzle — exits upward (Y+) from top of volute
-  const dischPipe=add(wire(new THREE.CylinderGeometry(0.072,0.072,0.310,12),C.teal,0.68));
+  const dischPipe=add(wireThick(new THREE.CylinderGeometry(0.072,0.072,0.310,12),C.teal,2.5,0.88));
   dischPipe.position.set(1.112,0.442,0);
   // Elbow at top of discharge
   const elbow=add(wire(new THREE.BoxGeometry(0.160,0.135,0.155),C.mid,0.62));
@@ -557,8 +645,31 @@ footer p{font-size:12px;color:var(--muted)}
     pad.position.set(x,-0.248,0);
   });
 
+  // ── FLUID FLOW PARTICLES ─────────────────────────────────────────
+  // Bright points that travel suction→pump→discharge to show the machine working
+  const flowMat = new THREE.PointsMaterial({
+    color:0x00ffdd, size:0.034, transparent:true, opacity:0.96, depthWrite:false
+  });
+  // Suction line: 22 particles travel right→left into pump (X: 1.56→1.12)
+  const SFLOW = 22;
+  const suctGeo = new THREE.BufferGeometry();
+  suctGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SFLOW*3), 3));
+  add(new THREE.Points(suctGeo, flowMat));
+
+  // Discharge line: 14 particles travel upward out of pump (Y: 0.30→0.72)
+  const DFLOW = 14;
+  const dischGeo = new THREE.BufferGeometry();
+  dischGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(DFLOW*3), 3));
+  add(new THREE.Points(dischGeo, flowMat));
+
+  // Pump volute circulation: 10 particles orbit inside casing (shows impeller flinging fluid)
+  const CFLOW = 10;
+  const cirGeo = new THREE.BufferGeometry();
+  cirGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(CFLOW*3), 3));
+  add(new THREE.Points(cirGeo, flowMat));
+
   // ── BASEPLATE ────────────────────────────────────────────────────
-  const base=add(wire(new THREE.BoxGeometry(2.78,0.058,0.78),C.dim,0.72));
+  const base=add(wireThick(new THREE.BoxGeometry(2.78,0.058,0.78),0x004455,2.0,0.75));
   base.position.set(0.36,-0.316,0);
   [-0.72,-0.22,0.38,1.02].forEach(x=>{
     const rib=add(wire(new THREE.BoxGeometry(0.013,0.088,0.78),C.dim,0.38));
@@ -605,7 +716,7 @@ footer p{font-size:12px;color:var(--muted)}
       name:'Impeller Cavitation',
       location:'Pump Impeller',
       severity:'WARNING',
-      parts:[pumpCasing, impeller, scrollBump]
+      parts:[pumpCasing, scrollBump]
     },
     {
       name:'Encoder Signal Loss',
@@ -724,19 +835,55 @@ footer p{font-size:12px;color:var(--muted)}
     controls.update(); // required for damping + autoRotate
 
     // Motor shaft → all shaft-coupled parts spin together
-    const ang = t * 0.022;
+    const ang = t * 4.5;
     shaft.rotation.x    = ang;
     enc.rotation.x      = ang;
     encDisc.rotation.x  = ang;
-    rotor.rotation.x    = ang;
+    rotorGroup.rotation.x = ang;
     coupA.rotation.x    = ang;
     spider.rotation.x   = ang;
     coupB.rotation.x    = ang;
-    impeller.rotation.x = ang;
-    impHub.rotation.x   = ang;
+    impellerGroup.rotation.x = ang;
 
     // Fan counter-rotates (cooling fan runs opposite to motor shaft)
     fanGroup.rotation.x = -ang * 1.15;
+
+    // ── FLUID FLOW ──────────────────────────────────────────────────
+    const fT = (t * 0.42) % 1.0;
+
+    // Suction: right→left (x 1.56→1.12) — water being drawn into pump
+    const sP = suctGeo.attributes.position.array;
+    for(let i=0; i<SFLOW; i++){
+      const frac = (i/SFLOW + fT) % 1.0;
+      const ph = i * 1.05;
+      sP[i*3]   = 1.56 - frac * 0.44;
+      sP[i*3+1] = Math.sin(ph) * 0.022;
+      sP[i*3+2] = Math.cos(ph) * 0.022;
+    }
+    suctGeo.attributes.position.needsUpdate = true;
+
+    // Discharge: bottom→top (y 0.30→0.73) — pressurised water leaving
+    const dP = dischGeo.attributes.position.array;
+    for(let i=0; i<DFLOW; i++){
+      const frac = (i/DFLOW + fT) % 1.0;
+      const ph = i * 1.26;
+      dP[i*3]   = 1.112 + Math.sin(ph) * 0.018;
+      dP[i*3+1] = 0.30  + frac * 0.43;
+      dP[i*3+2] = Math.cos(ph) * 0.018;
+    }
+    dischGeo.attributes.position.needsUpdate = true;
+
+    // Pump volute: particles orbit inside casing, flung by impeller
+    const cP = cirGeo.attributes.position.array;
+    const cT  = t * 1.6; // orbit faster than flow
+    for(let i=0; i<CFLOW; i++){
+      const a = (i/CFLOW)*Math.PI*2 + cT;
+      const r = 0.11 + (i%3)*0.04;
+      cP[i*3]   = 1.112;
+      cP[i*3+1] = Math.sin(a) * r;
+      cP[i*3+2] = Math.cos(a) * r;
+    }
+    cirGeo.attributes.position.needsUpdate = true;
 
     // Fault cycle — suspended while user has manually selected a fault
     if(!manualMode){
@@ -758,7 +905,7 @@ footer p{font-size:12px;color:var(--muted)}
       });
     }
 
-    renderer.render(scene, camera);
+    composer.render();
   }
   animate();
 
@@ -766,6 +913,11 @@ footer p{font-size:12px;color:var(--muted)}
     W=hero.clientWidth; H=hero.clientHeight;
     camera.aspect=W/H; camera.updateProjectionMatrix();
     renderer.setSize(W,H);
+    composer.setSize(W,H);
+    scene.traverse(o=>{
+      if(o.material && o.material.isLineMaterial)
+        o.material.resolution.set(W,H);
+    });
   });
 })();
 </script>
